@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { ChatMessage as ChatMessageData, RiskResult } from '../types';
+import type { ChatDiagnostics, ChatMessage as ChatMessageData, RiskResult } from '../types';
 import AvatarPanel from './AvatarPanel';
 import ChatMessageItem from './ChatMessage';
+import DeveloperPanel from './DeveloperPanel';
 import RiskResultCard from './RiskResultCard';
 
 interface ChatInterfaceProps {
@@ -9,6 +10,7 @@ interface ChatInterfaceProps {
   messages: ChatMessageData[];
   loading: boolean;
   error: string | null;
+  latestDiagnostics: ChatDiagnostics | null;
   onSendMessage: (text: string) => void;
   onReset: () => void;
   onDownload: () => void;
@@ -19,6 +21,7 @@ export default function ChatInterface({
   messages,
   loading,
   error,
+  latestDiagnostics,
   onSendMessage,
   onReset,
   onDownload,
@@ -118,6 +121,8 @@ export default function ChatInterface({
         This is a scripted demonstration guide, not a clinician. It cannot diagnose
         conditions or recommend treatment.
       </p>
+
+      <DeveloperPanel diagnostics={latestDiagnostics} />
     </div>
   );
 }

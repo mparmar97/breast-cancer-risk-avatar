@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import ChatInterface from '../../src/components/ChatInterface';
-import type { ChatMessage, RiskResult } from '../../src/types';
+import type { ChatDiagnostics, ChatMessage, RiskResult } from '../../src/types';
 
 const riskResult: RiskResult = {
   model: 'Mock Demonstration Calculator',
@@ -21,6 +21,26 @@ const messages: ChatMessage[] = [
   },
 ];
 
+const diagnostics: ChatDiagnostics = {
+  adaptiveState: {
+    understanding: 'correct',
+    emotion: 'worried',
+    barrier: 'fear',
+    selfEfficacy: 'unknown',
+    readiness: 'considering',
+    safetyFlag: 'none',
+    confidence: 0.75,
+  },
+  strategy: 'acknowledge_emotion',
+  theoryConstruct: {
+    theory: 'Motivational Interviewing communication principles',
+    construct: 'reflective listening and autonomy support',
+    communicationTechnique: 'reflection and open-ended question',
+    objective: 'acknowledge emotion without increasing fear',
+  },
+  responseMode: 'local-fallback',
+};
+
 describe('ChatInterface', () => {
   it('renders the risk result, avatar placeholder, and existing messages', () => {
     render(
@@ -29,6 +49,7 @@ describe('ChatInterface', () => {
         messages={messages}
         loading={false}
         error={null}
+        latestDiagnostics={diagnostics}
         onSendMessage={vi.fn()}
         onReset={vi.fn()}
         onDownload={vi.fn()}
@@ -38,6 +59,27 @@ describe('ChatInterface', () => {
     expect(screen.getByText(/elevated risk \(demo\)/i)).toBeInTheDocument();
     expect(screen.getByText(/guide avatar/i)).toBeInTheDocument();
     expect(screen.getByText('Hello')).toBeInTheDocument();
+  });
+
+  it('shows the developer details disclosure with the latest diagnostics, but not in the main transcript', () => {
+    render(
+      <ChatInterface
+        riskResult={riskResult}
+        messages={messages}
+        loading={false}
+        error={null}
+        latestDiagnostics={diagnostics}
+        onSendMessage={vi.fn()}
+        onReset={vi.fn()}
+        onDownload={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/developer details/i)).toBeInTheDocument();
+    expect(screen.getByText('acknowledge_emotion')).toBeInTheDocument();
+    expect(screen.getByText(/not psychological diagnoses/i)).toBeInTheDocument();
+    // The internal state must never be rendered as part of the visible chat transcript.
+    expect(screen.queryByText('worried', { selector: '.chat-message-bubble' })).not.toBeInTheDocument();
   });
 
   it('sends the typed message and clears the input', async () => {
@@ -50,6 +92,7 @@ describe('ChatInterface', () => {
         messages={[]}
         loading={false}
         error={null}
+        latestDiagnostics={null}
         onSendMessage={onSendMessage}
         onReset={vi.fn()}
         onDownload={vi.fn()}
@@ -71,6 +114,7 @@ describe('ChatInterface', () => {
         messages={[]}
         loading
         error={null}
+        latestDiagnostics={null}
         onSendMessage={vi.fn()}
         onReset={vi.fn()}
         onDownload={vi.fn()}
@@ -88,6 +132,7 @@ describe('ChatInterface', () => {
         messages={[]}
         loading={false}
         error="Unable to reach the chat service."
+        latestDiagnostics={null}
         onSendMessage={vi.fn()}
         onReset={vi.fn()}
         onDownload={vi.fn()}
@@ -108,6 +153,7 @@ describe('ChatInterface', () => {
         messages={[]}
         loading={false}
         error={null}
+        latestDiagnostics={null}
         onSendMessage={vi.fn()}
         onReset={onReset}
         onDownload={onDownload}

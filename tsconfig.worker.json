@@ -17,5 +17,5 @@
 
     "types": ["@cloudflare/workers-types", "vite/client"]
   },
-  "include": ["worker", "tests/worker"]
+  "include": ["worker", "tests/worker", "tests/*.test.ts"]
 }

@@ -39,10 +39,30 @@ function mockFetchSequence() {
     }
 
     if (url.includes('/api/chat')) {
-      return new Response(JSON.stringify({ reply: 'A risk estimate is not a diagnosis.' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          reply: 'A risk estimate is not a diagnosis.',
+          adaptiveState: {
+            understanding: 'incorrect',
+            emotion: 'uncertain',
+            barrier: 'none',
+            selfEfficacy: 'unknown',
+            readiness: 'unclear',
+            safetyFlag: 'diagnosis_request',
+            confidence: 0.9,
+          },
+          strategy: 'safety_boundary',
+          theoryConstruct: {
+            theory: 'medical risk-communication safety',
+            construct: 'scope and role boundary',
+            communicationTechnique: 'clear non-diagnostic statement',
+            objective: 'prevent diagnosis and treatment advice',
+          },
+          responseMode: 'local-fallback',
+          timestamp: '2026-08-04T00:00:00.000Z',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     }
 
     return new Response('not found', { status: 404 });

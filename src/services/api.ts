@@ -1,4 +1,11 @@
-import type { ChatMessage, HealthResponse, RiskBranch, RiskResult } from '../types';
+import type {
+  AdaptiveState,
+  ChatApiResponse,
+  ChatMessage,
+  HealthResponse,
+  RiskBranch,
+  RiskResult,
+} from '../types';
 
 interface ApiErrorBody {
   error?: string;
@@ -37,15 +44,18 @@ export async function fetchMockRisk(scenario: RiskBranch): Promise<RiskResult> {
 export async function sendChatMessage(
   message: string,
   history: ChatMessage[],
-): Promise<string> {
+  riskResult: RiskResult | null,
+  previousState: AdaptiveState | null,
+): Promise<ChatApiResponse> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
       history: history.map(({ role, content }) => ({ role, content })),
+      riskResult,
+      previousState,
     }),
   });
-  const data = await parseJsonOrThrow<{ reply: string }>(response);
-  return data.reply;
+  return parseJsonOrThrow<ChatApiResponse>(response);
 }

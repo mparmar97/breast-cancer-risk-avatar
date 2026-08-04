@@ -9,6 +9,7 @@ export function createEmptySession(): SessionData {
     screen: 'consent',
     riskResult: null,
     messages: [],
+    latestDiagnostics: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -32,10 +33,24 @@ export function loadSession(): SessionData {
     if (!raw) {
       return createEmptySession();
     }
-    const parsed = JSON.parse(raw) as Partial<SessionData>;
+    const parsed = JSON.parse(raw) as Partial<SessionData> | null;
+    if (!parsed || typeof parsed !== 'object') {
+      return createEmptySession();
+    }
+
+    // Defensive merge: older or corrupted sessions may be missing newer
+    // fields (e.g. latestDiagnostics, added in Phase 3) or have malformed
+    // values for existing ones. Any field absent or invalid falls back to
+    // the empty-session default rather than crashing the app.
+    const base = createEmptySession();
     return {
-      ...createEmptySession(),
+      ...base,
       ...parsed,
+      messages: Array.isArray(parsed.messages) ? parsed.messages : base.messages,
+      latestDiagnostics:
+        parsed.latestDiagnostics && typeof parsed.latestDiagnostics === 'object'
+          ? parsed.latestDiagnostics
+          : base.latestDiagnostics,
     };
   } catch {
     return createEmptySession();

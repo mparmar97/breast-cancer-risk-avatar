@@ -34,17 +34,18 @@ export default function App() {
         />
       )}
 
-      {session.screen === 'chat' && session.riskResult && (
-        <ChatInterface
-          riskResult={session.riskResult}
-          messages={session.messages}
-          loading={chatStatus.loading}
-          error={chatStatus.error}
-          onSendMessage={sendMessage}
-          onReset={resetSession}
-          onDownload={downloadSessionJson}
-        />
-      )}
+            {session.screen === 'chat' && session.riskResult && (
+              <ChatInterface
+                riskResult={session.riskResult}
+                messages={session.messages}
+                loading={chatStatus.loading}
+                error={chatStatus.error}
+                latestDiagnostics={session.latestDiagnostics}
+                onSendMessage={sendMessage}
+                onReset={resetSession}
+                onDownload={downloadSessionJson}
+              />
+            )}
     </main>
   );
 }

@@ -92,16 +92,28 @@ export function useSession() {
 
     setChatStatus({ loading: true, error: null });
     try {
-      const reply = await sendChatMessage(trimmed, historySnapshot);
+      const previousState = session.latestDiagnostics?.adaptiveState ?? null;
+      const apiResponse = await sendChatMessage(
+        trimmed,
+        historySnapshot,
+        session.riskResult,
+        previousState,
+      );
       const assistantMessage: ChatMessage = {
         id: createMessageId(),
         role: 'assistant',
-        content: reply,
-        timestamp: new Date().toISOString(),
+        content: apiResponse.reply,
+        timestamp: apiResponse.timestamp ?? new Date().toISOString(),
       };
       setSession((prev) => ({
         ...prev,
         messages: [...prev.messages, assistantMessage],
+        latestDiagnostics: {
+          adaptiveState: apiResponse.adaptiveState,
+          strategy: apiResponse.strategy,
+          theoryConstruct: apiResponse.theoryConstruct,
+          responseMode: apiResponse.responseMode,
+        },
         updatedAt: new Date().toISOString(),
       }));
       setChatStatus(IDLE_STATUS);
@@ -112,7 +124,7 @@ export function useSession() {
           error instanceof Error ? error.message : 'Unable to reach the chat service.',
       });
     }
-  }, []);
+  }, [session.latestDiagnostics, session.riskResult]);
 
   const resetSession = useCallback(() => {
     clearSession();
