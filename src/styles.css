@@ -1,0 +1,509 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: #f3f4f6;
+  color: #111827;
+  line-height: 1.5;
+}
+
+#root {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.app {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Card shell -------------------------------------------------------------- */
+
+.card {
+  width: 100%;
+  background: #ffffff;
+  color: #111827;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.08);
+  padding: 2rem 1.75rem;
+  text-align: center;
+}
+
+.card--narrow {
+  max-width: 480px;
+}
+
+.card--wide {
+  max-width: 640px;
+  text-align: left;
+}
+
+.title {
+  font-size: 1.5rem;
+  line-height: 1.35;
+  margin: 0 0 1.25rem;
+  color: #111827;
+  font-weight: 700;
+  text-align: center;
+}
+
+.body-text {
+  margin: 0 0 1.25rem;
+  color: #374151;
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.disclaimer-footnote {
+  margin: 1.25rem 0 0;
+  color: #6b7280;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Disclaimer box (consent screen) ----------------------------------------- */
+
+.disclaimer {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  margin: 0 0 1.5rem;
+  text-align: left;
+}
+
+.disclaimer-title {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+  color: #991b1b;
+  font-size: 0.9rem;
+}
+
+.disclaimer-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #7f1d1d;
+  font-size: 0.875rem;
+}
+
+.disclaimer-list li {
+  margin-bottom: 0.35rem;
+}
+
+.disclaimer-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* Consent checkbox ---------------------------------------------------------*/
+
+.consent-control {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 44px;
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+.checkbox {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.consent-label {
+  font-size: 0.9rem;
+  color: #1f2937;
+  cursor: pointer;
+}
+
+/* Buttons ------------------------------------------------------------------*/
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.btn--full {
+  width: 100%;
+}
+
+.btn--primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn--secondary {
+  background: #eef2ff;
+  color: #1e3a8a;
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: #e0e7ff;
+}
+
+.btn--ghost {
+  background: #f3f4f6;
+  color: #374151;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.button-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Shared status text (health status, calculator, chat errors) ------------ */
+
+.status-card {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.status-dot {
+  flex-shrink: 0;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+
+.status-dot--checking {
+  background: #d97706;
+}
+
+.status-dot--connected {
+  background: #16a34a;
+}
+
+.status-dot--disconnected {
+  background: #dc2626;
+}
+
+.status-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.status-meta {
+  margin: 0.6rem 0 0;
+  font-size: 0.875rem;
+  color: #4b5563;
+  text-align: center;
+}
+
+.status-meta--error {
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+.retry-button {
+  margin-top: 1rem;
+  min-height: 44px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #dc2626;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.retry-button:hover {
+  background: #b91c1c;
+}
+
+/* Risk result card ----------------------------------------------------------*/
+
+.risk-card {
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.risk-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.risk-badge--average {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.risk-badge--elevated {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.risk-value {
+  margin: 0.6rem 0 0.35rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.risk-value-unit {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.risk-model {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.risk-disclaimer {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #92400e;
+  font-weight: 500;
+}
+
+/* Avatar placeholder ---------------------------------------------------------*/
+
+.avatar-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.avatar-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.avatar-caption {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Chat transcript ------------------------------------------------------------*/
+
+.chat-transcript {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.chat-empty {
+  color: #6b7280;
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+}
+
+.chat-message--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.chat-message--assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.chat-message-sender {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.2rem;
+}
+
+.chat-message-bubble {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.chat-message--user .chat-message-bubble {
+  background: #2563eb;
+  color: #ffffff;
+  border-top-right-radius: 4px;
+}
+
+.chat-message--assistant .chat-message-bubble {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-top-left-radius: 4px;
+}
+
+.chat-message--pending .chat-message-bubble {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.chat-message-time {
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+/* Chat input row ------------------------------------------------------------*/
+
+.chat-form {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.chat-input {
+  flex: 1;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #111827;
+  background: #ffffff;
+}
+
+.chat-input:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+.chat-input::placeholder {
+  color: #9ca3af;
+}
+
+.chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+/* Accessibility utilities ----------------------------------------------------*/
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (max-width: 380px) {
+  .card {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+
+  .chat-actions {
+    flex-direction: column;
+  }
+
+  .chat-actions .btn {
+    width: 100%;
+  }
+}
