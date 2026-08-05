@@ -37,8 +37,47 @@ const diagnostics: ChatDiagnostics = {
     construct: 'reflective listening and autonomy support',
     communicationTechnique: 'reflection and open-ended question',
     objective: 'acknowledge emotion without increasing fear',
+    sourceIds: ['MERCADO-ECA-MI-2023'],
+    citations: ['Mercado M, et al. Embodied conversational agents providing motivational interviewing to improve health-related behaviors: scoping review. J Med Internet Res. 2023.'],
   },
-  responseMode: 'local-fallback',
+  retrievalQuery: 'risk concern fear probability not diagnosis supportive explanation',
+  sources: [
+    {
+      id: 'nci-elevated-not-certain-001',
+      sourceId: 'NCI-RISK-TOOLS-2024',
+      title: 'How Breast Cancer Risk Assessment Tools Work',
+      organization: 'National Cancer Institute',
+      section: 'Interpreting high and low estimates',
+      topic: 'elevated_risk_not_current_cancer',
+      score: 0.531,
+      status: 'vetted',
+      sourceUse: 'medical-rag',
+      sourceType: 'government-patient-education',
+      sourceUrl:
+        'https://www.cancer.gov/news-events/cancer-currents-blog/2024/understanding-breast-cancer-risk-assessment-tools',
+      publicationDate: '2024-06-27',
+      accessedDate: '2026-08-04',
+      citation: 'Reynolds S. How Breast Cancer Risk Assessment Tools Work. National Cancer Institute. June 27, 2024.',
+    },
+  ],
+  dialogueDesignSources: [
+    {
+      id: 'mercado-mi-evidence-001',
+      sourceId: 'MERCADO-ECA-MI-2023',
+      title:
+        'Embodied Conversational Agents Providing Motivational Interviewing to Improve Health-Related Behaviors: Scoping Review',
+      organization: 'Journal of Medical Internet Research',
+      topic: 'motivational_interviewing_agent',
+      status: 'vetted',
+      sourceType: 'systematic-review',
+      sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/38064707/',
+      publicationDate: '2023',
+      accessedDate: '2026-08-04',
+      citation:
+        'Mercado M, et al. Embodied conversational agents providing motivational interviewing to improve health-related behaviors: scoping review. J Med Internet Res. 2023.',
+    },
+  ],
+  responseMode: 'local-rag-fallback',
 };
 
 describe('ChatInterface', () => {
@@ -78,6 +117,11 @@ describe('ChatInterface', () => {
     expect(screen.getByText(/developer details/i)).toBeInTheDocument();
     expect(screen.getByText('acknowledge_emotion')).toBeInTheDocument();
     expect(screen.getByText(/not psychological diagnoses/i)).toBeInTheDocument();
+    // RAG diagnostics: retrieval query and source metadata should be visible.
+    expect(screen.getByText(/risk concern fear probability/i)).toBeInTheDocument();
+    expect(screen.getByText('How Breast Cancer Risk Assessment Tools Work')).toBeInTheDocument();
+    expect(screen.getByText('0.531')).toBeInTheDocument();
+    expect(screen.getByText(/all active entries are marked as vetted/i)).toBeInTheDocument();
     // The internal state must never be rendered as part of the visible chat transcript.
     expect(screen.queryByText('worried', { selector: '.chat-message-bubble' })).not.toBeInTheDocument();
   });

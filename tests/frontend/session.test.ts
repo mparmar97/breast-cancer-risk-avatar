@@ -39,6 +39,42 @@ describe('session storage', () => {
     expect(session.latestDiagnostics).toBeNull();
   });
 
+  it('fills in defaults for a Phase 3 latestDiagnostics missing retrievalQuery/sources', () => {
+    const phase3Session = {
+      ...createEmptySession(),
+      consentGiven: true,
+      screen: 'chat',
+      latestDiagnostics: {
+        adaptiveState: {
+          understanding: 'correct',
+          emotion: 'worried',
+          barrier: 'fear',
+          selfEfficacy: 'unknown',
+          readiness: 'considering',
+          safetyFlag: 'none',
+          confidence: 0.75,
+        },
+        strategy: 'acknowledge_emotion',
+        theoryConstruct: {
+          theory: 'Motivational Interviewing communication principles',
+          construct: 'reflective listening and autonomy support',
+          communicationTechnique: 'reflection and open-ended question',
+          objective: 'acknowledge emotion without increasing fear',
+        },
+        responseMode: 'local-fallback',
+        // retrievalQuery and sources intentionally absent (pre-Phase-4 shape).
+      },
+    };
+    window.localStorage.setItem('vare.session.v1', JSON.stringify(phase3Session));
+
+    const session = loadSession();
+    expect(session.latestDiagnostics).not.toBeNull();
+    expect(session.latestDiagnostics?.retrievalQuery).toBe('');
+    expect(session.latestDiagnostics?.sources).toEqual([]);
+    expect(session.latestDiagnostics?.dialogueDesignSources).toEqual([]);
+    expect(session.latestDiagnostics?.strategy).toBe('acknowledge_emotion');
+  });
+
   it('recovers to an empty session when stored data is corrupted JSON', () => {
     window.localStorage.setItem('vare.session.v1', '{not valid json');
 

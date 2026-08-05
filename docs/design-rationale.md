@@ -4,6 +4,20 @@
 **Date:** August 2026  
 **One-page summary for PDF export**
 
+> **Note on implementation status.** This page describes the target
+> end-state vision for the project (including a Groq-hosted LLM and a
+> LiveAvatar presenter, neither of which is implemented in the current
+> prototype — see the constraints in each phase's brief). The evidence
+> pipeline actually implemented today is local, deterministic, keyword-
+> based retrieval (no embeddings, no external API) over 17 vetted,
+> traceable chunks from 10 real sources — see
+> [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md) and
+> [`RAG_ARCHITECTURE.md`](./RAG_ARCHITECTURE.md) for what is actually
+> built and tested today. This is an **evidence-grounded, theory-informed
+> educational prototype** — it is not clinically validated, diagnostic, or
+> proven to change behavior, and human review is required before any
+> clinical use.
+
 ---
 
 ## Problem & goal
@@ -26,7 +40,7 @@ Breast cancer risk calculators return a percentage that many users find either m
 
 **Why:** Absolute risks with denominators (e.g., “2 in 100”) outperform relative-only framing for comprehension and appropriate worry.
 
-**In the dialogue:** Opening script and system prompt require absolute risk + age-matched comparator; forbid “double your risk” without absolute numbers. RAG chunk `fagerlin-1` enforces evidence grounding.
+**In the dialogue:** Opening script and system prompt require absolute risk + age-matched comparator; forbid “double your risk” without absolute numbers. In the implemented prototype, the `nci-natural-frequency-001` evidence chunk (National Cancer Institute — see [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md)) grounds this natural-frequency framing.
 
 ### 3. Motivational Interviewing (OARS) — Rollnick, Miller & Butler, 2008
 
@@ -54,7 +68,7 @@ Breast cancer risk calculators return a percentage that many users find either m
 |----------|-----------|
 | **LiveAvatar LITE + Groq** | 1 credit/min vs 2 for FULL; full control of RAG prompt and theory scripts |
 | **Gail Model (client-side)** | NCI-standard tool; transparent; no PHI sent for calculation |
-| **Keyword RAG vs embeddings** | 8 small chunks; deterministic citations; no embedding API cost |
+| **Keyword RAG vs embeddings** | 17 small, vetted chunks from 10 real sources; deterministic citations; no embedding API cost; no live medical web search at runtime |
 | **Cloudflare Workers** | Free tier, single deploy unit (SPA + API), global edge |
 | **Text fallback + static image** | R5 compliance when WebRTC/avatar fails |
 | **Sandbox-first dev** | Protects 150-credit budget per trial constraints |
@@ -77,6 +91,20 @@ Breast cancer risk calculators return a percentage that many users find either m
 4. NCI Breast Cancer Risk Assessment Tool (Gail Model). https://bcrisktool.cancer.gov/  
 5. Gail MH, et al. Projecting individualized probabilities of developing breast cancer. *JNCI.* 1989.  
 6. Oeffinger KC, et al. Breast cancer screening for women at average risk. *JAMA.* 2015.  
+
+**Sources actually implemented in the prototype's evidence pipeline
+today** (10 sources, 17 chunks — full citations, URLs, and per-chunk
+claims in [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md)):
+
+- Medical RAG: National Cancer Institute (About the Gail Model calculator;
+  the online calculator; "How Breast Cancer Risk Assessment Tools Work";
+  "Breast Cancer Risk in American Women"; "Understanding Breast Changes and
+  Conditions"); US Preventive Services Task Force (2024 breast cancer
+  screening recommendation).
+- Dialogue-design (theory/technique rationale, never medical support):
+  Reyna 2008 (Fuzzy-Trace Theory); Wolfe et al. 2015 and Widmer et al. 2015
+  (BRCA Gist tutoring-dialogue studies); Mercado et al. 2023 (motivational
+  interviewing in embodied conversational agents, scoping review).
 
 ---
 

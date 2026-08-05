@@ -1,9 +1,20 @@
-# Theory → Strategy → Dialogue Map (Phase 3)
+# Theory → Strategy → Dialogue Map (Phase 3 / 4b)
 
 This document explains how each dialogue strategy in
 `worker/behavioral/policy.ts` is grounded in an established health-behavior
 or communication theory, how the policy priority order is derived, and why
 safety rules always take precedence over behavioral strategy.
+
+As of Phase 4b, several of these theory mappings are additionally backed by
+a vetted, citable **dialogue-design** source (see
+[`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md#dialogue-design-sources)).
+These sources justify *why* a technique was chosen — they are design
+rationale, never the factual basis for a diagnosis, treatment, medication,
+or individualized screening/follow-up recommendation. They are surfaced via
+`worker/behavioral/theoryMap.ts#TheoryConstruct.sourceIds`/`citations` and
+via `worker/rag/retrieve.ts#getDialogueDesignEvidence(strategy)`, which the
+developer panel renders in a separate "Dialogue-design evidence" section,
+never mixed with medical-rag evidence.
 
 ## Strategy selection priority
 
@@ -68,6 +79,26 @@ matched, first.
 completeness (and potential future use), but the current priority algorithm
 in step 9 above does not route to it directly — it is reserved as a
 selectable strategy for future refinement of the policy.
+
+## Strategy → dialogue-design source mapping
+
+| Strategy                | Dialogue-design source(s)                                    |
+| ------------------------| ---------------------------------------------------------------|
+| `clarify_risk`          | `REYNA-FTT-2008`, `WIDMER-TUTORIAL-DIALOGUES-2015`             |
+| `acknowledge_emotion`   | `MERCADO-ECA-MI-2023`                                          |
+| `explore_barrier`       | `MERCADO-ECA-MI-2023`                                          |
+| `support_self_efficacy` | `MERCADO-ECA-MI-2023`                                          |
+| `action_planning`       | `MERCADO-ECA-MI-2023`                                          |
+| `explore_readiness`, `safety_boundary`, `urgent_referral`, `explain_benefit` | *(none linked)* |
+
+`REYNA-FTT-2008` (the original Fuzzy-Trace Theory paper) and
+`WIDMER-TUTORIAL-DIALOGUES-2015` (tutorial-dialogue/teach-back design for
+genetic breast-cancer-risk gist explanations) justify `clarify_risk`'s
+plain-language-plus-teach-back technique. `MERCADO-ECA-MI-2023` (a scoping
+review of motivational interviewing in embodied conversational agents)
+justifies the open-question/reflective, autonomy-supportive technique used
+by `acknowledge_emotion`, `explore_barrier`, `support_self_efficacy`, and
+`action_planning`.
 
 ### How Health Belief Model constructs are operationalized
 

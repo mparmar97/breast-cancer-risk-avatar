@@ -1,6 +1,33 @@
-import type { SessionData } from '../types';
+import type { ChatDiagnostics, SessionData } from '../types';
 
 const STORAGE_KEY = 'vare.session.v1';
+
+/**
+ * Normalizes a stored `latestDiagnostics` value, filling in defaults for
+ * fields introduced after the value may have been written (e.g. Phase 3
+ * sessions predate `retrievalQuery`/`sources`, added in Phase 4). Returns
+ * null for anything that isn't at least a recognizable diagnostics object.
+ */
+function normalizeDiagnostics(value: unknown): ChatDiagnostics | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as Partial<ChatDiagnostics>;
+  if (!candidate.adaptiveState || !candidate.strategy || !candidate.theoryConstruct) {
+    return null;
+  }
+
+  return {
+    adaptiveState: candidate.adaptiveState,
+    strategy: candidate.strategy,
+    theoryConstruct: candidate.theoryConstruct,
+    retrievalQuery: typeof candidate.retrievalQuery === 'string' ? candidate.retrievalQuery : '',
+    sources: Array.isArray(candidate.sources) ? candidate.sources : [],
+    dialogueDesignSources: Array.isArray(candidate.dialogueDesignSources) ? candidate.dialogueDesignSources : [],
+    responseMode: candidate.responseMode ?? 'local-rag-fallback',
+  };
+}
 
 export function createEmptySession(): SessionData {
   const now = new Date().toISOString();
@@ -47,10 +74,7 @@ export function loadSession(): SessionData {
       ...base,
       ...parsed,
       messages: Array.isArray(parsed.messages) ? parsed.messages : base.messages,
-      latestDiagnostics:
-        parsed.latestDiagnostics && typeof parsed.latestDiagnostics === 'object'
-          ? parsed.latestDiagnostics
-          : base.latestDiagnostics,
+      latestDiagnostics: normalizeDiagnostics(parsed.latestDiagnostics),
     };
   } catch {
     return createEmptySession();

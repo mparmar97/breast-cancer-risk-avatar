@@ -8,10 +8,11 @@
     "dev": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
+    "evidence:check": "vitest run tests/evidenceValidation.test.ts tests/sourceSeparation.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "build": "vite build",
     "deploy": "npm run build && wrangler deploy",
-    "check": "npm run test && npm run typecheck && npm run build"
+    "check": "npm run test && npm run evidence:check && npm run typecheck && npm run build"
   },
   "dependencies": {
     "react": "^19.1.0",

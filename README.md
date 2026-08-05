@@ -1,11 +1,49 @@
 # VARE — Breast-Cancer Risk Avatar Prototype
 
-Foundation for a full-stack application built with React, TypeScript, Vite,
-and Cloudflare Workers. This phase establishes the project scaffolding and a
-working `/api/health` round-trip between the frontend and the Worker backend.
+A full-stack educational prototype built with React, TypeScript, Vite, and
+Cloudflare Workers: a mock breast-cancer risk result, a theory-informed
+adaptive dialogue engine, and a transparent, locally-retrieved evidence
+pipeline grounding the chat replies. It is an **evidence-grounded,
+theory-informed educational prototype** — not a diagnostic tool, not
+clinically validated, and not proven to change behavior. See
+[`docs/design-rationale.md`](./docs/design-rationale.md) for the full
+rationale.
 
-Groq, RAG, the risk calculator, and LiveAvatar are **not** implemented yet —
-they are planned for later phases.
+Groq (hosted LLM) and LiveAvatar (video presenter) are **not** implemented
+yet — the chat pipeline currently uses a local, deterministic response
+generator (no external LLM) grounded in a local, keyword-based evidence
+retriever (no external vector database or API key). See
+[`docs/RAG_ARCHITECTURE.md`](./docs/RAG_ARCHITECTURE.md) and
+[`docs/ADAPTIVE_STATE_MODEL.md`](./docs/ADAPTIVE_STATE_MODEL.md) for how
+this works today.
+
+## What's implemented
+
+- **Consent screen** → **mock risk calculator** (`average`/`elevated`
+  demonstration branches) → **chat**, with `localStorage` session
+  persistence, a Reset Session action, and a Download Session JSON export.
+- **Adaptive dialogue engine** (`worker/behavioral/`): a deterministic,
+  rule-based classifier estimates temporary conversational state
+  (understanding, emotion, barrier, self-efficacy, readiness, safety flag)
+  per message and selects a theory-informed dialogue strategy. These are
+  temporary conversational-state *estimates* for prototype testing, never
+  a psychological diagnosis — see
+  [`docs/ADAPTIVE_STATE_MODEL.md`](./docs/ADAPTIVE_STATE_MODEL.md).
+- **Local RAG evidence pipeline** (`worker/rag/`): every chat reply's
+  factual/medical claims are grounded in evidence retrieved (via local
+  cosine-similarity search — no embeddings, no network call) from **17
+  vetted, traceable chunks from 10 real sources** (National Cancer
+  Institute, USPSTF, and peer-reviewed behavioral-science literature) —
+  see [`docs/EVIDENCE_REGISTER.md`](./docs/EVIDENCE_REGISTER.md). Medical
+  sources (`medical-rag`) are the only kind ever used to ground a reply;
+  behavioral-theory sources (`dialogue-design`) justify *technique*
+  choices only and are surfaced solely in developer diagnostics/docs.
+- **Fixed safety responses and output validation**
+  (`worker/safety/`) for diagnosis/treatment requests, urgent symptoms, and
+  emotional crisis — these always override generated text.
+- **Developer Panel** (visible in dev mode or via a "Developer details"
+  disclosure): shows the adaptive-state estimate, selected strategy, theory
+  mapping, retrieval query, and full source metadata for the latest reply.
 
 ## Stack
 
@@ -55,10 +93,11 @@ serves the React app and runs the Worker in the Workers runtime via
 | `npm run dev` | Start the unified Vite + Worker dev server |
 | `npm run test` | Run the Vitest suite once |
 | `npm run test:watch` | Run Vitest in watch mode |
+| `npm run evidence:check` | Run the evidence-collection structural validation and medical-rag/dialogue-design separation tests (`worker/rag/validateEvidence.ts`) |
 | `npm run typecheck` | Type-check the frontend (`tsconfig.json`) and the Worker (`tsconfig.worker.json`) |
 | `npm run build` | Build the production frontend + Worker bundle |
 | `npm run deploy` | Build and deploy to Cloudflare Workers |
-| `npm run check` | Run tests, type checking, and the production build — the full CI gate |
+| `npm run check` | Run tests, evidence checks, type checking, and the production build — the full CI gate |
 
 ## API
 
@@ -76,6 +115,35 @@ Returns:
 
 The React page calls this endpoint on load and displays whether the backend
 is connected.
+
+### `POST /api/mock-risk`
+
+Accepts `{ "scenario": "average" | "elevated" }` and returns the
+corresponding demonstration risk result (not a real calculation).
+
+### `POST /api/chat`
+
+Accepts `{ "message": string, "history"?: ... }`. Runs the full pipeline
+described in [`docs/RAG_ARCHITECTURE.md`](./docs/RAG_ARCHITECTURE.md):
+adaptive-state classification → theory-based strategy selection →
+retrieval-query build → local evidence retrieval (medical-rag only) →
+safety check → response generation/validation. Returns `reply`,
+`adaptiveState`, `strategy`, `theoryConstruct`, `retrievalQuery`,
+`sources` (medical-rag evidence metadata only), `dialogueDesignSources`
+(theory-support metadata, developer-only), `responseMode`, and
+`timestamp`. No message content is persisted server-side.
+
+## Documentation
+
+| Doc | Covers |
+|---|---|
+| [`docs/ADAPTIVE_STATE_MODEL.md`](./docs/ADAPTIVE_STATE_MODEL.md) | The temporary conversational-state classifier — not a diagnostic model |
+| [`docs/THEORY_DIALOGUE_MAP.md`](./docs/THEORY_DIALOGUE_MAP.md) | Strategy priority order, theory mapping, and dialogue-design source citations |
+| [`docs/RAG_ARCHITECTURE.md`](./docs/RAG_ARCHITECTURE.md) | The local retrieval pipeline, medical-rag/dialogue-design separation, and limitations |
+| [`docs/EVIDENCE_REGISTER.md`](./docs/EVIDENCE_REGISTER.md) | The 10 vetted sources and 17 evidence chunks currently in use |
+| [`docs/SOURCE_REPLACEMENT_CHECKLIST.md`](./docs/SOURCE_REPLACEMENT_CHECKLIST.md) | How to vet and add a new evidence source |
+| [`docs/TEST_SCENARIOS.md`](./docs/TEST_SCENARIOS.md) | Manual test scripts for the dialogue engine |
+| [`docs/design-rationale.md`](./docs/design-rationale.md) | One-page design rationale and current-vs-planned scope |
 
 ## Development environment note (local machine)
 

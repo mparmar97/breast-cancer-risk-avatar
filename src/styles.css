@@ -501,15 +501,97 @@ body {
 }
 
 .dev-panel-note {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
   color: #6b7280;
   font-size: 0.8rem;
   font-style: italic;
 }
 
+.dev-panel-warning {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background-color: #fef3c7;
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.dev-panel-info {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background-color: #ecfdf5;
+  color: #065f46;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.dev-panel-restriction {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  background-color: #fef2f2;
+  color: #991b1b;
+  font-size: 0.76rem;
+}
+
+.dev-panel-source-theory {
+  border-color: #ddd6fe;
+  background-color: #faf5ff;
+}
+
 .dev-panel-empty {
-  margin: 0;
+  margin: 0 0 0.5rem;
   color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.dev-panel-heading {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dev-panel-heading:first-of-type {
+  margin-top: 0.25rem;
+}
+
+.dev-panel-query {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #111827;
+  word-break: break-word;
+}
+
+.dev-panel-query-label {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.dev-panel-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dev-panel-source {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #ffffff;
+}
+
+.dev-panel-source-title {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+  color: #111827;
   font-size: 0.85rem;
 }
 

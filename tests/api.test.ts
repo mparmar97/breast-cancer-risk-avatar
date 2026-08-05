@@ -25,6 +25,8 @@ interface ChatResponseBody {
     communicationTechnique: string;
     objective: string;
   };
+  retrievalQuery: string;
+  sources: Array<{ id: string; topic: string; score: number; status: string }>;
   responseMode: string;
   timestamp: string;
   error?: string;
@@ -99,9 +101,15 @@ describe('POST /api/chat', () => {
     expect(body.theoryConstruct.objective).toBeTruthy();
   });
 
-  it('sets responseMode to local-fallback', async () => {
+  it('sets responseMode to local-rag-fallback', async () => {
     const { body } = await postChat({ message: 'I cannot afford another appointment.' });
-    expect(body.responseMode).toBe('local-fallback');
+    expect(body.responseMode).toBe('local-rag-fallback');
+  });
+
+  it('includes retrievalQuery and sources (Phase 4 RAG fields) in the response', async () => {
+    const { body } = await postChat({ message: 'I cannot afford another appointment.' });
+    expect(typeof body.retrievalQuery).toBe('string');
+    expect(Array.isArray(body.sources)).toBe(true);
   });
 
   it('returns a urgent_referral strategy and no phone number for an urgent symptom', async () => {
