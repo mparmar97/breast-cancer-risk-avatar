@@ -1,26 +1,36 @@
-import { classifyLocalState } from './behavioral/localClassifier';
-import { selectDialogueStrategy } from './behavioral/policy';
+import { isDialogueStrategy } from './behavioral/policy';
 import { normalizeAdaptiveState, type AdaptiveState } from './behavioral/state';
-import { getTheoryConstruct } from './behavioral/theoryMap';
-import { generateLocalResponse } from './llm/localGenerator';
+import {
+  normalizeDecisionSupportState,
+  type DecisionSupportState,
+} from './decisionSupport/types';
+import {
+  normalizeAssistantDialogueAct,
+  normalizeBarrierUnmentionedTurns,
+  normalizePendingItem,
+  normalizeRecentStrategies,
+} from './dialogue/buildConversationContext';
+import {
+  normalizeConversationMemory,
+  type ConversationMemory,
+} from './dialogue/conversationMemory';
+import { NO_PENDING_ITEM } from './dialogue/types';
+import { buildRecentConversationContext } from './llm/conversationContext';
+import { DEFAULT_GROQ_MODEL } from './llm/groqClient';
 import { getMockRiskResult, isRiskBranch, isRiskResult } from './mockRisk';
-import { buildRetrievalQuery } from './rag/buildQuery';
-import { getDialogueDesignEvidence, retrieveEvidence } from './rag/retrieve';
+import { getDialogueDesignEvidence } from './rag/retrieve';
 import { toDialogueDesignMetadata, toSourceMetadata } from './rag/types';
-import { getFixedSafetyResponse } from './safety/safetyResponses';
-import { validateResponse } from './safety/validateResponse';
+import { orchestrateDialogueTurn } from './orchestration/orchestrateDialogueTurn';
+import { buildOrchestrationSummary } from './orchestration/buildOrchestrationSummary';
+import { assertLatestMessagePresent, createTurnRequest } from './request/turnRequest';
+import { computeEducationalRisk, isCalculatorInputs } from './risk/simplifiedGail';
 import type { Env } from './types';
 
 export type { Env };
-export const WORKER_VERSION = '0.1.0';
+export const WORKER_VERSION = '0.7.0';
 
 // Used only when a chat request omits (or sends an invalid) risk result.
-// The demonstration risk result never affects the fixed reply wording in
-// this phase, but the generator's signature always expects one.
 const DEFAULT_CHAT_RISK_RESULT = getMockRiskResult('average');
-
-// Evidence retrieved and returned to the developer panel per turn.
-const EVIDENCE_RESULT_LIMIT = 3;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -40,6 +50,21 @@ function handleHealth(): Response {
   });
 }
 
+/**
+ * GET /api/config-status — reports only whether Groq is configured and
+ * which model would be used, never the key itself.
+ */
+function handleConfigStatus(env: Env): Response {
+  const groqConfigured = Boolean(env.GROQ_API_KEY);
+  const groqModel = env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+  return json({
+    backendConnected: true,
+    groqConfigured,
+    groqModel,
+    dynamicModeAvailable: groqConfigured,
+  });
+}
+
 async function readJsonBody(request: Request): Promise<unknown | null> {
   try {
     return await request.json();
@@ -49,14 +74,38 @@ async function readJsonBody(request: Request): Promise<unknown | null> {
 }
 
 async function handleMockRisk(request: Request): Promise<Response> {
-  const body = await readJsonBody(request);
-  const scenario = (body as { scenario?: unknown } | null)?.scenario;
+  const body = (await readJsonBody(request)) as {
+    scenario?: unknown;
+    inputs?: unknown;
+  } | null;
 
+  if (body?.inputs !== undefined) {
+    if (!isCalculatorInputs(body.inputs)) {
+      return json(
+        {
+          error:
+            'inputs must include age (35–85), ageAtMenarche, ageAtFirstLiveBirth, firstDegreeRelatives (0–2), priorBiopsies (0–2), and atypicalHyperplasia',
+        },
+        400,
+      );
+    }
+    return json(computeEducationalRisk(body.inputs));
+  }
+
+  const scenario = body?.scenario;
   if (!isRiskBranch(scenario)) {
-    return json({ error: "scenario must be 'average' or 'elevated'" }, 400);
+    return json(
+      { error: "Provide calculator inputs, or scenario must be 'average' or 'elevated'" },
+      400,
+    );
   }
 
   return json(getMockRiskResult(scenario));
+}
+
+interface ChatRequestHistoryEntry {
+  role?: unknown;
+  content?: unknown;
 }
 
 interface ChatRequestBody {
@@ -64,93 +113,186 @@ interface ChatRequestBody {
   history?: unknown;
   riskResult?: unknown;
   previousState?: unknown;
+  previousDecisionState?: unknown;
+  previousConversationMemory?: unknown;
+  previousStrategy?: unknown;
+  previousAssistantDialogueAct?: unknown;
+  pendingItem?: unknown;
+  recentStrategies?: unknown;
+  barrierUnmentionedTurns?: unknown;
 }
 
 /**
- * Phase 4 chat pipeline:
- *   validate request body -> validate non-empty message -> load
- *   conversation history -> classify adaptive state -> select dialogue
- *   strategy -> retrieve theory mapping -> check for fixed safety
- *   response -> build retrieval query -> retrieve top evidence entries ->
- *   generate evidence-grounded local response (when no fixed safety
- *   response applies) -> validate the final response -> return structured
- *   JSON.
+ * Adaptive orchestration entrypoint (see docs/GENERAL_DYNAMIC_DIALOGUE_MANAGER.md
+ * and docs/PROJECT_INNOVATION_SUMMARY.md):
  *
- * Retrieval always runs, even for safety-flagged messages, so the
- * developer panel can still show relevant source metadata — but the
- * fixed safety reply itself never depends on retrieval or generation.
- * Nothing is persisted server-side between requests.
+ * validate → sanitize → safety pre-check → current-turn interpretation →
+ * consistency → short-reply resolution → adaptive-state transition →
+ * decisional-needs transition → dialogue strategy → decision-support strategy →
+ * dialogue-turn plan → decision-support turn plan → medical RAG →
+ * dynamic generation → grounding/safety/progression/repetition validation →
+ * one repair → local fallback → structured metadata.
+ *
+ * Groq never independently controls the pipeline.
  */
-async function handleChat(request: Request): Promise<Response> {
-  // 1. Validate request body.
+async function handleChat(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const record = body as ChatRequestBody | null;
 
-  // 2. Validate non-empty message.
-  const message = record?.message;
-  if (typeof message !== 'string' || message.trim().length === 0) {
+  const rawMessage = record?.message;
+  if (typeof rawMessage !== 'string' || rawMessage.trim().length === 0) {
     return json({ error: 'message must be a non-empty string' }, 400);
   }
+  const message = rawMessage.trim();
+  assertLatestMessagePresent(message, 'handleChat');
 
-  // 3. Load conversation history. Client-supplied only — the server keeps
-  // no message history of its own, so this is accepted for forward
-  // compatibility (e.g. future multi-turn retrieval context) but does not
-  // yet change classification or retrieval.
-  const history: unknown[] = Array.isArray(record?.history) ? record.history : [];
-  void history;
+  const rawHistory: ChatRequestHistoryEntry[] = Array.isArray(record?.history)
+    ? (record.history as ChatRequestHistoryEntry[])
+    : [];
+  const historyForContext = rawHistory.map((entry) => ({
+    role: typeof entry.role === 'string' ? entry.role : '',
+    content: entry.content,
+  }));
+  const recentConversation = buildRecentConversationContext(historyForContext, { maxMessages: 10 });
+
+  const turnRequest = createTurnRequest({
+    latestMessage: message,
+    recentConversation,
+  });
 
   const riskResult = isRiskResult(record?.riskResult) ? record.riskResult : DEFAULT_CHAT_RISK_RESULT;
-  const previousState = record?.previousState
+  const previousState: AdaptiveState | undefined = record?.previousState
     ? normalizeAdaptiveState(record.previousState as Partial<AdaptiveState>)
     : undefined;
+  const previousDecisionState: DecisionSupportState | undefined = record?.previousDecisionState
+    ? normalizeDecisionSupportState(record.previousDecisionState as Partial<DecisionSupportState>)
+    : undefined;
+  const previousConversationMemory: ConversationMemory = normalizeConversationMemory(
+    record?.previousConversationMemory as Partial<ConversationMemory> | undefined,
+  );
+  void (isDialogueStrategy(record?.previousStrategy) ? record?.previousStrategy : undefined);
+  const previousAssistantDialogueAct = normalizeAssistantDialogueAct(record?.previousAssistantDialogueAct);
+  const pendingItem = normalizePendingItem(record?.pendingItem) ?? NO_PENDING_ITEM;
+  const recentStrategies = normalizeRecentStrategies(record?.recentStrategies);
+  const barrierUnmentionedTurns = normalizeBarrierUnmentionedTurns(record?.barrierUnmentionedTurns);
 
-  // 4. Classify adaptive state.
-  const adaptiveState = classifyLocalState(message, previousState);
+  const result = await orchestrateDialogueTurn(env, {
+    latestMessage: turnRequest.latestMessage,
+    turnRequest,
+    recentConversation,
+    riskResult,
+    previousAdaptiveState: previousState,
+    previousDecisionState,
+    previousConversationMemory,
+    previousAssistantDialogueAct: previousAssistantDialogueAct ?? undefined,
+    pendingConversationItem: pendingItem,
+    recentStrategies,
+    barrierUnmentionedTurns,
+  });
 
-  // 5. Select dialogue strategy.
-  const strategy = selectDialogueStrategy(adaptiveState);
+  const dialogueDesignSources = getDialogueDesignEvidence(result.dialogueStrategy).map(toDialogueDesignMetadata);
+  const orchestrationSummary = buildOrchestrationSummary(result);
 
-  // 6. Retrieve theory mapping.
-  const theoryConstruct = getTheoryConstruct(strategy);
-
-  // 7. Check for a fixed safety response.
-  const fixedSafetyReply = getFixedSafetyResponse(adaptiveState.safetyFlag);
-
-  // 8. Build the retrieval query.
-  const retrievalQuery = buildRetrievalQuery({ message, state: adaptiveState, strategy, riskResult });
-
-  // 9. Retrieve the top evidence entries. Only ever "medical-rag" evidence
-  // is retrieved here — this is the sole factual basis the response
-  // generator is allowed to use. "dialogue-design" evidence (behavioral
-  // theory / conversational-technique sources) is fetched separately,
-  // below, strictly for developer diagnostics — it is never passed to
-  // generateLocalResponse.
-  const evidence = retrieveEvidence(retrievalQuery, { limit: EVIDENCE_RESULT_LIMIT, sourceUse: 'medical-rag' });
-
-  // 10. Generate an evidence-grounded local response, unless a fixed
-  // safety response overrides it.
-  const candidateReply =
-    fixedSafetyReply ?? generateLocalResponse({ strategy, state: adaptiveState, riskResult, evidence });
-
-  // 11. Validate the final response.
-  const reply = validateResponse(candidateReply);
-
-  // Developer-only: the dialogue-design (behavioral-theory) evidence that
-  // justifies the selected strategy's technique. Never used as medical
-  // support and never blended with `sources` below.
-  const dialogueDesignSources = getDialogueDesignEvidence(strategy).map(toDialogueDesignMetadata);
-
-  // 12. Return structured JSON. Raw evidence text is never included —
-  // only non-sensitive source metadata (see worker/rag/types.ts).
   return json({
-    reply,
-    adaptiveState,
-    strategy,
-    theoryConstruct,
-    retrievalQuery,
-    sources: evidence.map(toSourceMetadata),
+    reply: result.response,
+    adaptiveState: result.adaptiveState,
+    previousAdaptiveState: previousState ?? null,
+    decisionState: result.decisionState,
+    previousDecisionState: previousDecisionState ?? null,
+    conversationMemory: result.conversationMemory,
+    previousConversationMemory: result.previousConversationMemory,
+    decisionTransition: result.decisionTransition,
+    decisionSupportStrategy: result.decisionSupportStrategy,
+    decisionSupportTheoryConstruct: result.decisionSupportTheoryConstruct,
+    decisionSupportTurnPlan: result.decisionSupportTurnPlan,
+    currentTurnEvidence: result.currentTurnInterpretation.currentTurnEvidence,
+    currentTurnInterpretation: result.currentTurnInterpretation,
+    requestInterpretation: result.requestInterpretation,
+    semanticTurn: result.semanticTurn ?? null,
+    responsePlan: result.responsePlan
+      ? {
+          primaryGoal: result.responsePlan.primaryGoal,
+          secondaryGoals: result.responsePlan.secondaryGoals,
+          directAnswerRequired: result.responsePlan.directAnswerRequired,
+          mustAddress: result.responsePlan.mustAddress,
+          factsNeeded: result.responsePlan.factsNeeded,
+          shouldAskQuestion: result.responsePlan.shouldAskQuestion,
+          questionPurpose: result.responsePlan.questionPurpose,
+        }
+      : null,
+    dialogueRoute: result.dialogueRoute
+      ? {
+          topic: result.dialogueRoute.topic,
+          primaryOperation: result.dialogueRoute.primaryOperation,
+          secondaryOperations: result.dialogueRoute.secondaryOperations,
+          stance: result.dialogueRoute.stance,
+          explicitRequest: result.dialogueRoute.explicitRequest,
+          directAnswerRequired: result.dialogueRoute.directAnswerRequired,
+          emotion: result.dialogueRoute.emotion,
+          barrier: result.dialogueRoute.barrier,
+          selectedInformationSource: result.dialogueRoute.selectedInformationSource,
+          confidence: result.dialogueRoute.confidence,
+          routingMode: result.dialogueRoute.routingMode,
+          currentTurnEvidence: result.dialogueRoute.currentTurnEvidence,
+        }
+      : null,
+    routingDiagnostics: result.routingDiagnostics ?? null,
+    resolvedShortReply: result.resolvedShortReply,
+    stateTransition: result.adaptiveTransition,
+    strategy: result.dialogueStrategy,
+    theoryConstruct: result.theoryConstruct,
+    dialogueTurnPlan: result.dialogueTurnPlan,
+    retrievalQuery: result.retrievalQuery,
+    calculationResult: result.calculationResult,
+    sources: result.retrievedEvidence.map(toSourceMetadata),
     dialogueDesignSources,
-    responseMode: 'local-rag-fallback',
+    usedEvidenceIds: result.usedEvidenceIds,
+    initialGeneratedResponse: result.initialGeneratedResponse,
+    repairedResponse: result.repairedResponse,
+    operationValidation: result.operationValidation,
+    operationRepairAttempted: result.operationRepairAttempted,
+    classificationMode: result.classificationMode,
+    responseMode: result.responseMode,
+    groqModel: result.groqModel,
+    classificationConsistency: result.classificationConsistency,
+    classificationRepairUsed: result.classificationRepairUsed,
+    strategyRepeated: result.strategyRepeated,
+    strategyProgressionApplied: result.strategyProgressionApplied,
+    repetitionDetected: result.repetitionDetected,
+    regenerationUsed: result.regenerationUsed,
+    similarityScore: result.similarityScore,
+    repeatedDialogueMove: result.repeatedDialogueMove,
+    dialogueAdvanced: result.dialogueAdvanced,
+    primaryGoalSatisfied: result.primaryGoalSatisfied,
+    decisionNeedAddressed: result.decisionNeedAddressed,
+    unsupportedAssumptionDetected: result.unsupportedAssumptionDetected,
+    resolvedIssueRepeated: result.resolvedIssueRepeated,
+    directQuestionAnswered: result.directQuestionAnswered,
+    shortReplyResolved: result.shortReplyResolved,
+    resolvedMeaning: result.resolvedMeaning,
+    understandingChanged: result.adaptiveTransition.understandingChanged,
+    repeatedExplanationDetected: result.repeatedExplanationDetected,
+    practicalRequestFulfilled: result.practicalRequestFulfilled,
+    userCorrectionHandled: result.userCorrectionHandled,
+    recentStrategies: result.recentStrategies,
+    safetyOverrideApplied: result.safetyOverrideApplied,
+    fallbackUsed: result.fallbackUsed,
+    orchestrationValidation: result.orchestrationValidation,
+    innovationMetadata: result.innovationMetadata,
+    orchestrationSummary,
+    ...(result.fallbackReason ? { fallbackReason: result.fallbackReason } : {}),
+    pipelineTrace: result.pipelineTrace ?? null,
+    providerExecution: result.providerExecution ?? null,
+    assumptionValidation: result.assumptionValidation ?? null,
+    metadataConsistency: result.metadataConsistency ?? null,
+    turnRequest: result.turnRequest
+      ? {
+          turnId: result.turnRequest.turnId,
+          sessionId: result.turnRequest.sessionId,
+          latestMessage: result.turnRequest.latestMessage,
+          receivedAt: result.turnRequest.receivedAt,
+        }
+      : null,
     timestamp: new Date().toISOString(),
   });
 }
@@ -163,12 +305,16 @@ export default {
       return handleHealth();
     }
 
+    if (url.pathname === '/api/config-status' && request.method === 'GET') {
+      return handleConfigStatus(env);
+    }
+
     if (url.pathname === '/api/mock-risk' && request.method === 'POST') {
       return handleMockRisk(request);
     }
 
     if (url.pathname === '/api/chat' && request.method === 'POST') {
-      return handleChat(request);
+      return handleChat(request, env);
     }
 
     if (url.pathname.startsWith('/api/')) {
@@ -177,4 +323,4 @@ export default {
 
     return env.ASSETS.fetch(request);
   },
-} satisfies ExportedHandler<Env>;
+};

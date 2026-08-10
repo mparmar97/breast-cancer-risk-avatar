@@ -4,19 +4,28 @@
 **Date:** August 2026  
 **One-page summary for PDF export**
 
-> **Note on implementation status.** This page describes the target
-> end-state vision for the project (including a Groq-hosted LLM and a
-> LiveAvatar presenter, neither of which is implemented in the current
-> prototype — see the constraints in each phase's brief). The evidence
-> pipeline actually implemented today is local, deterministic, keyword-
-> based retrieval (no embeddings, no external API) over 17 vetted,
-> traceable chunks from 10 real sources — see
-> [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md) and
-> [`RAG_ARCHITECTURE.md`](./RAG_ARCHITECTURE.md) for what is actually
-> built and tested today. This is an **evidence-grounded, theory-informed
-> educational prototype** — it is not clinically validated, diagnostic, or
-> proven to change behavior, and human review is required before any
-> clinical use.
+> **Note on implementation status.** **Groq** powers optional dynamic
+> reply generation with a local grounded fallback (rate limit / network /
+> safety). Groq never chooses dialogue strategy or invents medical facts
+> outside retrieved evidence — see
+> [`PHASE_5_GROQ_DYNAMIC_DIALOGUE.md`](./PHASE_5_GROQ_DYNAMIC_DIALOGUE.md).
+> The app includes a **built-in Gail-inspired educational calculator form**
+> (not the official NCI BCRAT) that branches average vs elevated, plus a
+> static **Maya** avatar image with text-chat failover when video is
+> unavailable. LiveAvatar streaming remains optional for credit-budget
+> reasons. Evidence is local keyword RAG over 17 chunks from 10 sources —
+> see [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md). This is an
+> educational prototype — not clinically validated.
+>
+> The prototype’s distinctive contribution is its **adaptive orchestration
+> layer**. It separates conversational-state interpretation, decisional-needs
+> support, behavioral-theory strategy selection, medical evidence
+> retrieval, dynamic language generation, and deterministic safety
+> validation. The application is designed to address contributors to
+> decisional conflict and improve decision preparedness. Clinical
+> effectiveness has not been established. See
+> [`PROJECT_INNOVATION_SUMMARY.md`](./PROJECT_INNOVATION_SUMMARY.md) and
+> [`NOVELTY_AND_RESEARCH_GAP.md`](./NOVELTY_AND_RESEARCH_GAP.md).
 
 ---
 
@@ -67,7 +76,7 @@ Breast cancer risk calculators return a percentage that many users find either m
 | Decision | Rationale |
 |----------|-----------|
 | **LiveAvatar LITE + Groq** | 1 credit/min vs 2 for FULL; full control of RAG prompt and theory scripts |
-| **Gail Model (client-side)** | NCI-standard tool; transparent; no PHI sent for calculation |
+| **Gail-inspired educational form** | Same input categories as Gail/BCRAT; simplified scoring for demo branching; clearly labeled non-clinical |
 | **Keyword RAG vs embeddings** | 17 small, vetted chunks from 10 real sources; deterministic citations; no embedding API cost; no live medical web search at runtime |
 | **Cloudflare Workers** | Free tier, single deploy unit (SPA + API), global edge |
 | **Text fallback + static image** | R5 compliance when WebRTC/avatar fails |
@@ -108,4 +117,4 @@ claims in [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md)):
 
 ---
 
-*Export this file to PDF: `npx md-to-pdf docs/design-rationale.md` or print from VS Code/GitHub.*
+*PDF hand-in: [`design-rationale.pdf`](./design-rationale.pdf) (regenerate with `node scripts/write-design-rationale-pdf.mjs`).*

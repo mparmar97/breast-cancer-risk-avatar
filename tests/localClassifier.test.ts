@@ -153,4 +153,33 @@ describe('classifyLocalState', () => {
     // Unrelated behavioral fields may carry over from the previous turn.
     expect(second.barrier).toBe(first.barrier);
   });
+
+  it('maps synonym and indirect cues onto adaptive-state categories', () => {
+    expect(classifyLocalState('this result freaks me out').emotion).toBe('worried');
+    expect(classifyLocalState('I keep meaning to follow up but have not gotten around to it').barrier).toBe(
+      'delay',
+    );
+    expect(classifyLocalState('I am lost on who to call about this').barrier).toBe('access');
+    expect(classifyLocalState('messaging feels doable for me').selfEfficacy).toMatch(/moderate|high/);
+    expect(classifyLocalState('I am only free after hours so calling is hard').barrier).toBe('time');
+    expect(classifyLocalState('the calculator sounds fishy to me').barrier).toBe('mistrust');
+    expect(classifyLocalState('i am tensed').emotion).toBe('worried');
+    expect(classifyLocalState('I feel tense about this result').emotion).toBe('worried');
+  });
+
+  it('infers emotion from unseen feeling words via fuzzy first-person frames', () => {
+    expect(classifyLocalState('i am jittery').emotion).toBe('worried');
+    expect(classifyLocalState('i feel apprehensive').emotion).toBe('worried');
+    expect(classifyLocalState('i am antsy about this').emotion).toBe('worried');
+    expect(classifyLocalState('i am fine').emotion).not.toBe('worried');
+  });
+
+  it('infers other adaptive fields from synonym / fuzzy cues', () => {
+    expect(classifyLocalState('follow up is too pricey for me right now').barrier).toBe('cost');
+    expect(classifyLocalState('i feel stuck and do not know how to start').selfEfficacy).toBe('low');
+    expect(classifyLocalState('i have decided to message the clinic tonight').readiness).toBe('ready');
+    expect(
+      classifyLocalState('that clicks now — the percentage is a probability not a diagnosis').understanding,
+    ).toBe('correct');
+  });
 });

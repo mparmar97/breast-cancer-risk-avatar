@@ -9,6 +9,10 @@ export interface RetrievalQueryInput {
   state: AdaptiveState;
   strategy: DialogueStrategy;
   riskResult: RiskResult;
+  /** Deterministically resolved short-reply meaning (Section 7), when the latest message was a short reply. Adds back the specific vocabulary a bare "yes"/"tonight" otherwise lacks. */
+  resolvedMeaning?: string;
+  /** The dialogue-turn plan's question purpose (Section 10) — e.g. "teach_back" nudges retrieval toward explanatory evidence. */
+  questionPurpose?: string;
 }
 
 // Strategy-specific retrieval concepts. These add domain vocabulary that
@@ -20,7 +24,11 @@ const STRATEGY_CONCEPTS: Record<DialogueStrategy, string> = {
   explain_benefit: 'professional interpretation benefit follow up personalized history',
   explore_barrier: 'follow up barrier manageable action appointment',
   support_self_efficacy: 'manageable next step confidence contact clinician follow up',
-  action_planning: 'concrete next action contact healthcare professional patient portal',
+  action_planning: 'concrete next action contact healthcare professional patient portal draft message',
+  confirm_progress: 'understanding clearer next concern question about result draft review',
+  greet_user: 'welcome educational guide conversation topic',
+  close_supportively: 'closing thanks conversation complete',
+  ask_clarification: 'clarification what the user meant',
   explore_readiness: 'readiness',
   safety_boundary: 'risk estimate not diagnosis medical scope limitation',
   urgent_referral: 'application cannot evaluate symptoms prompt professional care',
@@ -47,21 +55,29 @@ const BARRIER_CONCEPTS: Partial<Record<Barrier, string>> = {
  * objective text, never fabricated medical content.
  */
 export function buildRetrievalQuery(input: RetrievalQueryInput): string {
-  const { message, state, strategy, riskResult } = input;
+  const { message, state, strategy, riskResult, resolvedMeaning, questionPurpose } = input;
 
   // The raw message carries the most specific, query-relevant vocabulary
   // (e.g. "certain", "five-year"), so it is weighted more heavily than the
   // generic strategy/theory vocabulary added below — otherwise a short,
   // specific message can be diluted into irrelevance by longer boilerplate.
+  // A resolved short-reply meaning ("the user wants an out-of-100
+  // explanation") is added at the same weight — a bare "yes"/"tonight"
+  // otherwise carries almost no retrieval-relevant vocabulary of its own.
   const parts: string[] = [
     message,
     message,
     message,
+    ...(resolvedMeaning ? [resolvedMeaning, resolvedMeaning] : []),
     riskResult.riskBranch,
     riskResult.riskHorizon,
     strategy,
     state.understanding,
   ];
+
+  if (questionPurpose && questionPurpose !== 'none') {
+    parts.push(questionPurpose.replace(/_/g, ' '));
+  }
 
   if (state.barrier !== 'none') {
     parts.push(state.barrier);

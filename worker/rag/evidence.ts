@@ -236,6 +236,116 @@ const CHUNK_DEFINITIONS: ChunkDefinition[] = [
       'General guideline context only. Do not use this chunk to generate an individualized screening recommendation from the prototype risk score.',
   },
 
+  // --- medical-rag chunks (lifestyle / fitness / first healthy steps) -------
+  {
+    id: 'nci-physical-activity-breast-001',
+    sourceId: 'NCI-PHYSICAL-ACTIVITY-FACT',
+    section: 'Physical activity and breast cancer risk',
+    topic: 'physical_activity',
+    keywords: [
+      'physical activity',
+      'exercise',
+      'fitness',
+      'active',
+      'breast cancer risk',
+      'prevention',
+      'lifestyle',
+      'workout',
+    ],
+    text:
+      'Many studies show that physically active women have a lower risk of breast cancer than inactive women. Physical activity has been associated with risk reductions among both premenopausal and postmenopausal women. These are population-level associations, not personalized exercise prescriptions.',
+    status: 'vetted',
+    clinicalUseRestriction:
+      'Population-level prevention information only. Do not prescribe an individualized exercise or treatment plan.',
+  },
+  {
+    id: 'nci-physical-activity-guidelines-001',
+    sourceId: 'NCI-PHYSICAL-ACTIVITY-FACT',
+    section: 'How much physical activity is recommended',
+    topic: 'lifestyle_risk',
+    keywords: [
+      '150 minutes',
+      'moderate activity',
+      'aerobic',
+      'physical activity guidelines',
+      'exercise',
+      'fitness',
+      'healthy habits',
+      'self efficacy',
+    ],
+    text:
+      'For substantial health benefits, U.S. physical activity guidelines recommend that adults get 150 to 300 minutes of moderate-intensity aerobic activity per week, or 75 to 150 minutes of vigorous activity, or an equivalent mix, plus muscle-strengthening activity on two or more days per week. Activity can be done in shorter episodes. This is general guidance, not a personalized medical plan.',
+    status: 'vetted',
+    clinicalUseRestriction:
+      'General public health guidance only. Do not turn into an individualized exercise prescription.',
+  },
+  {
+    id: 'nci-breast-prevention-exercise-001',
+    sourceId: 'NCI-BREAST-PREVENTION-PDQ',
+    section: 'Physical exercise and breast cancer risk',
+    topic: 'physical_activity',
+    keywords: [
+      'physical exercise',
+      'reduced breast cancer risk',
+      'prevention',
+      'modifiable',
+      'fitness',
+      'active lifestyle',
+      'benefit',
+    ],
+    text:
+      'Based on solid evidence summarized by NCI, physical exercise is associated with reduced breast cancer risk. Reported average relative-risk reductions are around 20% in studied populations for both premenopausal and postmenopausal women. Association is not a guarantee for any one person.',
+    status: 'vetted',
+    clinicalUseRestriction:
+      'Population-level prevention evidence only. Do not claim that exercise prevents cancer for a specific user.',
+  },
+  {
+    id: 'acs-lifestyle-modifiable-001',
+    sourceId: 'ACS-BREAST-RISK-PREVENTION',
+    section: 'Lifestyle-related breast cancer risk factors',
+    topic: 'lifestyle_risk',
+    keywords: [
+      'lifestyle',
+      'body weight',
+      'alcohol',
+      'physical activity',
+      'diet',
+      'prevention',
+      'modifiable risk',
+      'healthy habits',
+      'initial care',
+      'take care',
+    ],
+    text:
+      'Some breast cancer risk factors relate to lifestyle, including body weight, physical activity, and alcohol use. Choosing healthier patterns in these areas may help lower risk at a population level, alongside appropriate professional care. Lifestyle information is not a substitute for individualized medical advice or cancer treatment.',
+    status: 'vetted',
+    clinicalUseRestriction:
+      'General risk-factor education only. Do not give personalized diet, weight-loss, alcohol, or treatment instructions.',
+  },
+  {
+    id: 'acs-first-steps-after-estimate-001',
+    sourceId: 'ACS-BREAST-RISK-PREVENTION',
+    section: 'Using risk information constructively',
+    topic: 'health_first_steps',
+    keywords: [
+      'next step',
+      'follow up',
+      'healthcare professional',
+      'prevention',
+      'healthy lifestyle',
+      'fitness',
+      'initial care',
+      'what can i do',
+      'motivate',
+      'cue to action',
+    ],
+    text:
+      'After learning about breast cancer risk, constructive first steps often include discussing the estimate with a qualified healthcare professional and supporting overall health through habits such as regular physical activity when appropriate. These are general educational ideas, not a diagnosis, treatment plan, or personalized care protocol.',
+    status: 'vetted',
+    clinicalUseRestriction:
+      'Educational first-step framing only. Never invent a treatment or self-care medical protocol.',
+  },
+
   // --- dialogue-design chunks -----------------------------------------------
   {
     id: 'reyna-ftt-gist-001',

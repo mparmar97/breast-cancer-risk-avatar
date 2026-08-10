@@ -1,7 +1,7 @@
 import type { EvidenceSourceType, EvidenceUse } from './types';
 
 /**
- * The 10 vetted sources backing the evidence chunks in
+ * The vetted sources backing the evidence chunks in
  * worker/rag/evidence.ts. Each source is recorded exactly once here;
  * evidence chunks reference a source by `sourceId` rather than repeating
  * its metadata, so the same organization/URL/citation can never drift out
@@ -90,6 +90,39 @@ export const SOURCE_REGISTRY: EvidenceSource[] = [
     publicationDate: '2024-04-30',
     accessedDate: '2026-08-04',
     citation: 'US Preventive Services Task Force. Breast Cancer: Screening. Final Recommendation Statement. April 30, 2024.',
+  },
+  {
+    sourceId: 'NCI-PHYSICAL-ACTIVITY-FACT',
+    title: 'Physical Activity and Cancer Fact Sheet',
+    organization: 'National Cancer Institute',
+    sourceUse: 'medical-rag',
+    sourceType: 'government-patient-education',
+    sourceUrl: 'https://www.cancer.gov/about-cancer/causes-prevention/risk/obesity/physical-activity-fact-sheet',
+    accessedDate: '2026-08-07',
+    citation:
+      'National Cancer Institute. Physical Activity and Cancer Fact Sheet. https://www.cancer.gov/about-cancer/causes-prevention/risk/obesity/physical-activity-fact-sheet',
+  },
+  {
+    sourceId: 'NCI-BREAST-PREVENTION-PDQ',
+    title: 'Breast Cancer Prevention (PDQ®)–Health Professional Version',
+    organization: 'National Cancer Institute',
+    sourceUse: 'medical-rag',
+    sourceType: 'government-patient-education',
+    sourceUrl: 'https://www.cancer.gov/types/breast/hp/breast-prevention-pdq',
+    accessedDate: '2026-08-07',
+    citation:
+      'National Cancer Institute. Breast Cancer Prevention (PDQ®)–Health Professional Version. https://www.cancer.gov/types/breast/hp/breast-prevention-pdq',
+  },
+  {
+    sourceId: 'ACS-BREAST-RISK-PREVENTION',
+    title: 'Breast Cancer Risk and Prevention',
+    organization: 'American Cancer Society',
+    sourceUse: 'medical-rag',
+    sourceType: 'professional-society-patient-education',
+    sourceUrl: 'https://www.cancer.org/cancer/types/breast-cancer/risk-and-prevention.html',
+    accessedDate: '2026-08-07',
+    citation:
+      'American Cancer Society. Breast Cancer Risk and Prevention. https://www.cancer.org/cancer/types/breast-cancer/risk-and-prevention.html',
   },
   {
     sourceId: 'WOLFE-BRCA-GIST-2015',

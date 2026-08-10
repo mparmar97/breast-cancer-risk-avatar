@@ -105,34 +105,39 @@ describe('generateLocalResponse', () => {
     expect(respondTo('fear')).toMatch(/fear/i);
     expect(respondTo('time')).toMatch(/time/i);
     expect(respondTo('cost')).toMatch(/cost/i);
-    expect(respondTo('access')).toMatch(/begin|primary-care|patient portal/i);
+    expect(respondTo('access')).toMatch(/primary care|gynecologist|cannot name a specific doctor/i);
   });
 
-  it('uses the grounded risk-explanation claim for clarify_risk when supporting evidence was retrieved', () => {
+  it('uses a number-aware risk explanation for clarify_risk when supporting evidence was retrieved', () => {
     const response = generateLocalResponse({
       strategy: 'clarify_risk',
       state: createDefaultAdaptiveState(),
       riskResult,
       evidence: GROUNDED_EVIDENCE,
     });
-    expect(response).toMatch(/does not mean that you currently have breast cancer/i);
+    expect(response).toMatch(/probability|not a diagnosis/i);
+    expect(response).toMatch(new RegExp(String(riskResult.fiveYearRisk)));
   });
 
-  it('falls back to the grounded-information message for clarify_risk when no supporting evidence was retrieved', () => {
+  it('still explains the risk number for clarify_risk when no RAG evidence was retrieved', () => {
     const withNoEvidence = generateLocalResponse({
       strategy: 'clarify_risk',
       state: createDefaultAdaptiveState(),
       riskResult,
       evidence: NO_EVIDENCE,
+      latestMessage: 'explain demonstration risk',
     });
     const withUnrelatedEvidence = generateLocalResponse({
       strategy: 'clarify_risk',
       state: createDefaultAdaptiveState(),
       riskResult,
       evidence: UNRELATED_EVIDENCE,
+      latestMessage: 'explain risk estimate',
     });
-    expect(withNoEvidence).toBe(NO_EVIDENCE_FALLBACK_RESPONSE);
-    expect(withUnrelatedEvidence).toBe(NO_EVIDENCE_FALLBACK_RESPONSE);
+    expect(withNoEvidence).toMatch(/probability|not a diagnosis/i);
+    expect(withNoEvidence).toMatch(new RegExp(String(riskResult.fiveYearRisk)));
+    expect(withUnrelatedEvidence).toMatch(/probability|not a diagnosis/i);
+    expect(withNoEvidence).not.toBe(NO_EVIDENCE_FALLBACK_RESPONSE);
   });
 
   it('includes the "not a diagnosis" claim for acknowledge_emotion only when grounded', () => {

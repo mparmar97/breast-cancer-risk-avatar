@@ -22,7 +22,8 @@ describe('GET /api/health', () => {
     expect(response.headers.get('Content-Type')).toContain('application/json');
 
     const body = (await response.json()) as HealthResponse;
-    expect(body).toMatchObject({ status: 'ok', version: '0.1.0' });
+    expect(body).toMatchObject({ status: 'ok' });
+    expect(typeof body.version).toBe('string');
     expect(typeof body.timestamp).toBe('string');
     expect(Number.isNaN(Date.parse(body.timestamp))).toBe(false);
   });

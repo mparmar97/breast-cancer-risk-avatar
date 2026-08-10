@@ -8,12 +8,15 @@ export default function App() {
     session,
     calculatorStatus,
     chatStatus,
+    configStatus,
     setConsentGiven,
     goToScreen,
     runMockRisk,
+    runCalculatedRisk,
     sendMessage,
     resetSession,
     downloadSessionJson,
+    downloadSessionCsv,
   } = useSession();
 
   return (
@@ -28,24 +31,27 @@ export default function App() {
 
       {session.screen === 'calculator' && (
         <CalculatorScreen
+          onSubmitInputs={runCalculatedRisk}
           onSelectScenario={runMockRisk}
           loading={calculatorStatus.loading}
           error={calculatorStatus.error}
         />
       )}
 
-            {session.screen === 'chat' && session.riskResult && (
-              <ChatInterface
-                riskResult={session.riskResult}
-                messages={session.messages}
-                loading={chatStatus.loading}
-                error={chatStatus.error}
-                latestDiagnostics={session.latestDiagnostics}
-                onSendMessage={sendMessage}
-                onReset={resetSession}
-                onDownload={downloadSessionJson}
-              />
-            )}
+      {session.screen === 'chat' && session.riskResult && (
+        <ChatInterface
+          riskResult={session.riskResult}
+          messages={session.messages}
+          loading={chatStatus.loading}
+          error={chatStatus.error}
+          latestDiagnostics={session.latestDiagnostics}
+          configStatus={configStatus}
+          onSendMessage={sendMessage}
+          onReset={resetSession}
+          onDownloadJson={downloadSessionJson}
+          onDownloadCsv={downloadSessionCsv}
+        />
+      )}
     </main>
   );
 }

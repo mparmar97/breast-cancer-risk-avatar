@@ -3,7 +3,7 @@
 The initial placeholder-to-vetted-source replacement described by earlier
 versions of this document is **complete**: every active chunk in
 [`worker/rag/evidence.ts`](../worker/rag/evidence.ts) is now `status:
-"vetted"` and traced to one of the 10 sources in
+"vetted"` and traced to a source in
 [`worker/rag/sourceRegistry.ts`](../worker/rag/sourceRegistry.ts) — see
 [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md) for the full register.
 

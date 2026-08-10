@@ -10,7 +10,50 @@ export type Barrier =
   | 'access'
   | 'mistrust'
   | 'uncertainty'
+  | 'delay'
   | 'other';
+
+/**
+ * A single-turn estimate of *why* the user sent this message. Unlike the
+ * core `AdaptiveState` fields above (which persist/carry across turns via
+ * {@link normalizeAdaptiveState} and the classifiers' fallback merging),
+ * `Intent` is always recomputed fresh per turn and is never carried
+ * forward — it exists only to let the deterministic dialogue policy
+ * (`worker/behavioral/policy.ts`) recognize a handful of Phase 5
+ * cross-cutting cases (e.g. "a direct informational question should be
+ * answered directly, even if a previous turn carried an emotion or
+ * barrier forward") without weakening the original Phase 3 priority
+ * order when no intent is supplied. It is not part of the public
+ * `AdaptiveState` shape and is never itself returned to the frontend —
+ * only a short natural-language rationale for it appears in
+ * `currentTurnEvidence.intent` (see worker/llm/classifyAdaptiveState.ts).
+ */
+export type Intent =
+  | 'greeting'
+  | 'gratitude'
+  | 'conversation_closing'
+  | 'social_acknowledgment'
+  | 'explain_risk'
+  | 'explain_risk_horizon'
+  | 'diagnosis_question'
+  | 'treatment_question'
+  | 'symptom_report'
+  | 'express_emotion'
+  | 'describe_barrier'
+  | 'express_confidence'
+  | 'express_ambivalence'
+  | 'request_next_step'
+  | 'confirm_action'
+  | 'confirm_understanding'
+  | 'accept_teach_back'
+  | 'request_draft_help'
+  | 'request_draft_review'
+  | 'confirm_proposed_action'
+  | 'correction'
+  | 'general_question'
+  | 'affirmation'
+  | 'negation'
+  | 'unclear';
 
 export type SelfEfficacy = 'low' | 'moderate' | 'high' | 'unknown';
 
@@ -55,20 +98,20 @@ export const DEFAULT_ADAPTIVE_STATE: AdaptiveState = {
   confidence: 0.4,
 };
 
-const UNDERSTANDING_VALUES: readonly Understanding[] = [
+export const UNDERSTANDING_VALUES: readonly Understanding[] = [
   'correct',
   'partial',
   'incorrect',
   'uncertain',
 ];
-const EMOTION_VALUES: readonly Emotion[] = [
+export const EMOTION_VALUES: readonly Emotion[] = [
   'calm',
   'worried',
   'overwhelmed',
   'dismissive',
   'uncertain',
 ];
-const BARRIER_VALUES: readonly Barrier[] = [
+export const BARRIER_VALUES: readonly Barrier[] = [
   'none',
   'fear',
   'time',
@@ -76,17 +119,50 @@ const BARRIER_VALUES: readonly Barrier[] = [
   'access',
   'mistrust',
   'uncertainty',
+  'delay',
   'other',
 ];
-const SELF_EFFICACY_VALUES: readonly SelfEfficacy[] = ['low', 'moderate', 'high', 'unknown'];
-const READINESS_VALUES: readonly Readiness[] = [
+
+export const INTENT_VALUES: readonly Intent[] = [
+  'greeting',
+  'gratitude',
+  'conversation_closing',
+  'social_acknowledgment',
+  'explain_risk',
+  'explain_risk_horizon',
+  'diagnosis_question',
+  'treatment_question',
+  'symptom_report',
+  'express_emotion',
+  'describe_barrier',
+  'express_confidence',
+  'express_ambivalence',
+  'request_next_step',
+  'confirm_action',
+  'confirm_understanding',
+  'accept_teach_back',
+  'request_draft_help',
+  'request_draft_review',
+  'confirm_proposed_action',
+  'correction',
+  'general_question',
+  'affirmation',
+  'negation',
+  'unclear',
+];
+
+export function isIntent(value: unknown): value is Intent {
+  return typeof value === 'string' && (INTENT_VALUES as readonly string[]).includes(value);
+}
+export const SELF_EFFICACY_VALUES: readonly SelfEfficacy[] = ['low', 'moderate', 'high', 'unknown'];
+export const READINESS_VALUES: readonly Readiness[] = [
   'not_considering',
   'considering',
   'preparing',
   'ready',
   'unclear',
 ];
-const SAFETY_FLAG_VALUES: readonly SafetyFlag[] = [
+export const SAFETY_FLAG_VALUES: readonly SafetyFlag[] = [
   'none',
   'diagnosis_request',
   'treatment_request',

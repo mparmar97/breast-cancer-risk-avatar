@@ -5,6 +5,16 @@ This document explains how each dialogue strategy in
 or communication theory, how the policy priority order is derived, and why
 safety rules always take precedence over behavioral strategy.
 
+The prototype’s distinctive contribution is its adaptive orchestration
+layer. It separates conversational-state interpretation, decisional-needs
+support, behavioral-theory strategy selection, medical evidence
+retrieval, dynamic language generation, and deterministic safety
+validation. The application is designed to address contributors to
+decisional conflict and improve decision preparedness. Clinical
+effectiveness has not been established. See
+[`DECISIONAL_CONFLICT_AND_DECISION_SUPPORT.md`](./DECISIONAL_CONFLICT_AND_DECISION_SUPPORT.md)
+for the ODSF-inspired decision-support strategies.
+
 As of Phase 4b, several of these theory mappings are additionally backed by
 a vetted, citable **dialogue-design** source (see
 [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md#dialogue-design-sources)).
@@ -79,6 +89,13 @@ matched, first.
 completeness (and potential future use), but the current priority algorithm
 in step 9 above does not route to it directly — it is reserved as a
 selectable strategy for future refinement of the policy.
+
+Lifestyle / fitness / initial healthy-step questions (`lifestyle_risk_information`)
+activate **Health Belief Model** (perceived benefits + cue to action) and
+**Motivational Interviewing** (autonomy-supportive ask) via
+`selectTheoryApplication`, grounded by medical-rag chunks such as
+`nci-physical-activity-breast-001` and `acs-first-steps-after-estimate-001`.
+They must not invent a treatment or personalized care plan.
 
 ## Strategy → dialogue-design source mapping
 

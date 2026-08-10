@@ -1,10 +1,19 @@
 # Local development secrets for the Cloudflare Worker.
-# Copy this file to `.dev.vars` (untracked) and fill in real values.
+# Copy this file to `.dev.vars` (untracked — never commit real secrets) and
+# fill in real values.
 #
-# `.dev.vars` is loaded automatically by `wrangler`/`vite dev` for local development.
-# No variables are required for the current health-check-only foundation; this file
-# exists so future phases (Groq, RAG, LiveAvatar) have a documented place to add secrets.
+# `.dev.vars` is loaded automatically by `wrangler`/`vite dev` for local
+# development. GROQ_API_KEY is optional: without it, the chat pipeline uses
+# only the local, deterministic classifier and response generator (see
+# docs/PHASE_5_GROQ_DYNAMIC_DIALOGUE.md). It is never exposed to the
+# frontend, API responses, developer details, logs, or the session export.
 
-# GROQ_API_KEY=
+GROQ_API_KEY=
+GROQ_MODEL=openai/gpt-oss-20b
+
+# Prefer local adaptive-state classification so Groq quota is spent on
+# groq-dynamic-rag replies (helps avoid rate_limit on free tier).
+GROQ_LOCAL_CLASSIFICATION=1
+
 # LIVEAVATAR_API_KEY=
 # LIVEAVATAR_AVATAR_ID=

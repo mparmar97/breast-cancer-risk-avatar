@@ -1,22 +1,20 @@
+import { CALCULATOR_DISCLAIMER } from './risk/simplifiedGail';
 import type { RiskBranch, RiskResult } from './types';
-
-const DEMONSTRATION_DISCLAIMER =
-  'Demonstration result only. This is not a validated medical calculation.';
 
 const MOCK_RESULTS: Record<RiskBranch, RiskResult> = {
   average: {
-    model: 'Mock Demonstration Calculator',
+    model: 'Simplified Educational Risk Form (demo scenario)',
     fiveYearRisk: 1.1,
     riskHorizon: '5 years',
     riskBranch: 'average',
-    disclaimer: DEMONSTRATION_DISCLAIMER,
+    disclaimer: CALCULATOR_DISCLAIMER,
   },
   elevated: {
-    model: 'Mock Demonstration Calculator',
+    model: 'Simplified Educational Risk Form (demo scenario)',
     fiveYearRisk: 3.2,
     riskHorizon: '5 years',
     riskBranch: 'elevated',
-    disclaimer: DEMONSTRATION_DISCLAIMER,
+    disclaimer: CALCULATOR_DISCLAIMER,
   },
 };
 

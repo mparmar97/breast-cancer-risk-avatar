@@ -29,6 +29,7 @@ export type EvidenceUse = 'medical-rag' | 'dialogue-design';
 export type EvidenceSourceType =
   | 'official-calculator-documentation'
   | 'government-patient-education'
+  | 'professional-society-patient-education'
   | 'clinical-guideline'
   | 'primary-research'
   | 'theory-paper'

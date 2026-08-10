@@ -34,6 +34,34 @@ const THEORY_MAP: Record<DialogueStrategy, TheoryConstruct> = {
     objective: 'distinguish probability from diagnosis',
     sourceIds: ['REYNA-FTT-2008', 'WIDMER-TUTORIAL-DIALOGUES-2015'],
   }),
+  confirm_progress: withCitations({
+    theory: 'Fuzzy-Trace Theory',
+    construct: 'gist comprehension confirmation',
+    communicationTechnique: 'acknowledge understanding and invite next concern',
+    objective: 'recognize that the explanation helped without re-explaining',
+    sourceIds: ['REYNA-FTT-2008', 'WIDMER-TUTORIAL-DIALOGUES-2015'],
+  }),
+  greet_user: withCitations({
+    theory: 'Motivational Interviewing communication principles',
+    construct: 'rapport and agenda setting',
+    communicationTechnique: 'brief welcome and open invitation',
+    objective: 'open the conversation without assuming worry or confusion',
+    sourceIds: ['MERCADO-ECA-MI-2023'],
+  }),
+  close_supportively: withCitations({
+    theory: 'Motivational Interviewing communication principles',
+    construct: 'autonomy support',
+    communicationTechnique: 'supportive closing without pressure',
+    objective: 'end the conversation without introducing a new barrier or action demand',
+    sourceIds: ['MERCADO-ECA-MI-2023'],
+  }),
+  ask_clarification: withCitations({
+    theory: 'Motivational Interviewing communication principles',
+    construct: 'open questions',
+    communicationTechnique: 'one targeted clarifying question',
+    objective: 'recover from a user correction without repeating the prior answer',
+    sourceIds: ['MERCADO-ECA-MI-2023'],
+  }),
   acknowledge_emotion: withCitations({
     theory: 'Motivational Interviewing communication principles',
     construct: 'reflective listening and autonomy support',
@@ -44,8 +72,9 @@ const THEORY_MAP: Record<DialogueStrategy, TheoryConstruct> = {
   explain_benefit: withCitations({
     theory: 'Health Belief Model',
     construct: 'perceived benefits',
-    communicationTechnique: 'permission-based explanation',
-    objective: 'explain the value of appropriate professional follow-up',
+    communicationTechnique: 'permission-based explanation of benefits and cues to action',
+    objective: 'explain the value of professional follow-up and healthy lifestyle steps without prescribing treatment',
+    sourceIds: ['MERCADO-ECA-MI-2023'],
   }),
   explore_barrier: withCitations({
     theory: 'Health Belief Model',

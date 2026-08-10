@@ -1,0 +1,128 @@
+%PDF-1.4
+1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj
+2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj
+3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj
+4 0 obj<< /Length 2972 >>stream
+BT
+/F1 10 Tf
+50 780 Td
+14 TL
+(Design Rationale — Breast Cancer Risk Companion) Tj
+T*
+() Tj
+T*
+(Author: Trial project submission) Tj
+T*
+(Date: August 2026) Tj
+T*
+(One-page summary for PDF export) Tj
+T*
+() Tj
+T*
+(Problem & goal) Tj
+T*
+() Tj
+T*
+(Breast cancer risk calculators return a percentage that many users find either meaningless) Tj
+T*
+(or frightening—neither reaction reliably drives appropriate follow-up. This app adds a 2–3) Tj
+T*
+(minute conversational layer: explain the number in plain language, branch on elevated vs) Tj
+T*
+(average risk, and motivate concrete next steps without diagnosing or impersonating a) Tj
+T*
+(clinician.) Tj
+T*
+() Tj
+T*
+(Theories chosen & operationalization) Tj
+T*
+() Tj
+T*
+(1. Health Belief Model \(HBM\) — Rosenstock, 1974; updated in breast screening literature) Tj
+T*
+() Tj
+T*
+(Why: HBM predicts preventive action when people perceive susceptibility and severity) Tj
+T*
+(*accurately*, believe benefits outweigh barriers, and feel capable of acting.) Tj
+T*
+() Tj
+T*
+(In the dialogue \(shared/dialogue.ts\):) Tj
+T*
+(- Elevated branch: Calibrate severity \(“most women with this estimate do *not* get) Tj
+T*
+(cancer”\); cue to action \(clinician visit in 2–4 weeks\); surface barriers \(cost, false) Tj
+T*
+(alarms\); build self-efficacy \(“you’re already taking a helpful step”\).) Tj
+T*
+(- Average branch: Reassure without false certainty; cue routine mammography; affirm) Tj
+T*
+(existing healthy behaviors.) Tj
+T*
+() Tj
+T*
+(2. Fagerlin et al. risk-communication principles — *Med Decis Making* 2007) Tj
+T*
+() Tj
+T*
+(Why: Absolute risks with denominators \(e.g., “2 in 100”\) outperform relative-only framing) Tj
+T*
+(for comprehension and appropriate worry.) Tj
+T*
+() Tj
+T*
+(In the dialogue: Opening script and system prompt require absolute risk + age-matched) Tj
+T*
+(comparator; forbid “double your risk” without absolute numbers. In the implemented) Tj
+T*
+(prototype, the nci-natural-frequency-001 evidence chunk \(National Cancer Institute — see) Tj
+T*
+(EVIDENCE_REGISTER.md\) grounds this natural-frequency framing.) Tj
+T*
+() Tj
+T*
+(3. Motivational Interviewing \(OARS\) — Rollnick, Miller & Butler, 2008) Tj
+T*
+() Tj
+T*
+(Why: Direct persuasion increases resistance in health contexts; MI elicits change talk.) Tj
+T*
+() Tj
+T*
+(In the dialogue: Elevated branch ends with open questions \(“What would help you take the) Tj
+T*
+(next step?”\); chat suggestions are user-paced; assistant reflects rather than commands.) Tj
+T*
+() Tj
+T*
+(Avatar choice: “Maya” — warm female health educator) Tj
+T*
+() Tj
+T*
+(Selection criteria \(research-informed\):) Tj
+T*
+(- Trust & warmth: Health messages from perceived-credible, empathetic presenters increase) Tj
+T*
+(recall and reduce defensive processing \(source: health communication meta-literature;) Tj
+T*
+(ACS/NCI patient-education tone\).) Tj
+T*
+(- Role clarity: Introduces self as AI health educator, not a clinician—reduces authority) Tj
+ET
+endstream
+endobj
+5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000056 00000 n 
+0000000111 00000 n 
+0000000235 00000 n 
+0000003256 00000 n 
+trailer<< /Size 6 /Root 1 0 R >>
+startxref
+3324
+%%EOF

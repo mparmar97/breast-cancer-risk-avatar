@@ -4,14 +4,43 @@ import { describe, expect, it, vi } from 'vitest';
 import CalculatorScreen from '../../src/components/CalculatorScreen';
 
 describe('CalculatorScreen', () => {
-  it('calls onSelectScenario with the correct branch for each button', async () => {
+  it('submits calculator inputs from the form', async () => {
+    const user = userEvent.setup();
+    const onSubmitInputs = vi.fn();
+
+    render(
+      <CalculatorScreen
+        onSubmitInputs={onSubmitInputs}
+        onSelectScenario={vi.fn()}
+        loading={false}
+        error={null}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /calculate and continue/i }));
+    expect(onSubmitInputs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        age: 45,
+        firstDegreeRelatives: 0,
+        atypicalHyperplasia: 'no',
+      }),
+    );
+  });
+
+  it('calls onSelectScenario with the correct branch for each demo button', async () => {
     const user = userEvent.setup();
     const onSelectScenario = vi.fn();
 
     render(
-      <CalculatorScreen onSelectScenario={onSelectScenario} loading={false} error={null} />,
+      <CalculatorScreen
+        onSubmitInputs={vi.fn()}
+        onSelectScenario={onSelectScenario}
+        loading={false}
+        error={null}
+      />,
     );
 
+    await user.click(screen.getByText(/quick demo scenarios/i));
     await user.click(screen.getByRole('button', { name: /test average-risk branch/i }));
     expect(onSelectScenario).toHaveBeenLastCalledWith('average');
 
@@ -19,17 +48,24 @@ describe('CalculatorScreen', () => {
     expect(onSelectScenario).toHaveBeenLastCalledWith('elevated');
   });
 
-  it('shows a loading indicator and disables buttons while loading', () => {
-    render(<CalculatorScreen onSelectScenario={vi.fn()} loading error={null} />);
+  it('shows a loading indicator and disables primary actions while loading', () => {
+    render(
+      <CalculatorScreen
+        onSubmitInputs={vi.fn()}
+        onSelectScenario={vi.fn()}
+        loading
+        error={null}
+      />,
+    );
 
     expect(screen.getByRole('status')).toHaveTextContent(/calculating/i);
-    expect(screen.getByRole('button', { name: /test average-risk branch/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /test elevated-risk branch/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /calculate and continue/i })).toBeDisabled();
   });
 
   it('shows a readable error message when the calculation fails', () => {
     render(
       <CalculatorScreen
+        onSubmitInputs={vi.fn()}
         onSelectScenario={vi.fn()}
         loading={false}
         error="Unable to calculate the demonstration result."

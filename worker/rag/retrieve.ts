@@ -114,6 +114,7 @@ export const localEvidenceRetriever: EvidenceRetriever = {
 // worker/behavioral/theoryMap.ts for the corresponding theory metadata.
 const STRATEGY_DIALOGUE_SOURCE_IDS: Partial<Record<DialogueStrategy, string[]>> = {
   clarify_risk: ['REYNA-FTT-2008', 'WIDMER-TUTORIAL-DIALOGUES-2015'],
+  confirm_progress: ['REYNA-FTT-2008', 'WIDMER-TUTORIAL-DIALOGUES-2015'],
   acknowledge_emotion: ['MERCADO-ECA-MI-2023'],
   explore_barrier: ['MERCADO-ECA-MI-2023'],
   support_self_efficacy: ['MERCADO-ECA-MI-2023'],

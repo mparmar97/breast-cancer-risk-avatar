@@ -31,6 +31,60 @@ const diagnostics: ChatDiagnostics = {
     safetyFlag: 'none',
     confidence: 0.75,
   },
+  previousAdaptiveState: null,
+  currentTurnEvidence: {
+    intent: 'expressed worry about the result',
+    understanding: 'not expressed',
+    emotion: '"I am scared"',
+    barrier: 'not expressed',
+    selfEfficacy: 'not expressed',
+    readiness: 'not expressed',
+    safetyFlag: 'not expressed',
+  },
+  currentTurnInterpretation: {
+    primaryIntent: 'express_emotion',
+    secondaryIntents: [],
+    understanding: 'correct',
+    emotion: 'worried',
+    barrier: 'fear',
+    selfEfficacy: 'unknown',
+    readiness: 'considering',
+    safetyFlag: 'none',
+    currentTurnEvidence: {
+      intent: 'expressed worry about the result',
+      understanding: 'not expressed',
+      emotion: '"I am scared"',
+      barrier: 'not expressed',
+      selfEfficacy: 'not expressed',
+      readiness: 'not expressed',
+      safetyFlag: 'not expressed',
+    },
+    refersToPreviousAssistantTurn: false,
+    shortReplyType: 'not_short_reply',
+    confidence: 0.75,
+  },
+  resolvedShortReply: {
+    isShortReply: false,
+    shortReplyType: 'not_short_reply',
+    requiresClarification: false,
+  },
+  stateTransition: {
+    previousUnderstanding: 'uncertain',
+    currentUnderstanding: 'correct',
+    understandingChanged: true,
+    previousEmotion: 'uncertain',
+    currentEmotion: 'worried',
+    previousBarrier: 'none',
+    currentBarrier: 'fear',
+    barrierCleared: false,
+    previousSelfEfficacy: 'unknown',
+    currentSelfEfficacy: 'unknown',
+    previousReadiness: 'unclear',
+    currentReadiness: 'considering',
+    stateChanged: true,
+    changedFields: ['emotion', 'barrier', 'readiness'],
+    barrierUnmentionedTurns: 0,
+  },
   strategy: 'acknowledge_emotion',
   theoryConstruct: {
     theory: 'Motivational Interviewing communication principles',
@@ -39,6 +93,19 @@ const diagnostics: ChatDiagnostics = {
     objective: 'acknowledge emotion without increasing fear',
     sourceIds: ['MERCADO-ECA-MI-2023'],
     citations: ['Mercado M, et al. Embodied conversational agents providing motivational interviewing to improve health-related behaviors: scoping review. J Med Internet Res. 2023.'],
+  },
+  dialogueTurnPlan: {
+    primaryGoal: 'acknowledge_emotion',
+    dialogueAct: 'reflect_emotion',
+    mustAddress: ['the emotion currently expressed: worried'],
+    mustNotAssume: [],
+    shouldAskQuestion: true,
+    questionPurpose: 'barrier_exploration',
+    nextPendingItem: {
+      type: 'question',
+      text: 'what part of the result feels most concerning',
+      expectedReplyType: 'open_response',
+    },
   },
   retrievalQuery: 'risk concern fear probability not diagnosis supportive explanation',
   sources: [
@@ -77,7 +144,30 @@ const diagnostics: ChatDiagnostics = {
         'Mercado M, et al. Embodied conversational agents providing motivational interviewing to improve health-related behaviors: scoping review. J Med Internet Res. 2023.',
     },
   ],
+  usedEvidenceIds: [],
+  classificationMode: 'local-fallback',
   responseMode: 'local-rag-fallback',
+  groqModel: 'openai/gpt-oss-20b',
+  classificationConsistency: 'fallback',
+  classificationRepairUsed: false,
+  strategyRepeated: false,
+  strategyProgressionApplied: false,
+  repetitionDetected: false,
+  regenerationUsed: false,
+  similarityScore: 0,
+  repeatedDialogueMove: null,
+  dialogueAdvanced: true,
+  primaryGoalSatisfied: true,
+  unsupportedAssumptionDetected: false,
+  resolvedIssueRepeated: false,
+  directQuestionAnswered: true,
+  shortReplyResolved: false,
+  resolvedMeaning: null,
+  understandingChanged: true,
+  repeatedExplanationDetected: false,
+  practicalRequestFulfilled: true,
+  userCorrectionHandled: true,
+  recentStrategies: ['acknowledge_emotion'],
 };
 
 describe('ChatInterface', () => {
@@ -91,12 +181,14 @@ describe('ChatInterface', () => {
         latestDiagnostics={diagnostics}
         onSendMessage={vi.fn()}
         onReset={vi.fn()}
-        onDownload={vi.fn()}
+        onDownloadJson={vi.fn()}
+        onDownloadCsv={vi.fn()}
       />,
     );
 
     expect(screen.getByText(/elevated risk \(demo\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/guide avatar/i)).toBeInTheDocument();
+    expect(screen.getByText(/maya/i)).toBeInTheDocument();
+    expect(screen.getByText(/video avatar session unavailable/i)).toBeInTheDocument();
     expect(screen.getByText('Hello')).toBeInTheDocument();
   });
 
@@ -110,15 +202,16 @@ describe('ChatInterface', () => {
         latestDiagnostics={diagnostics}
         onSendMessage={vi.fn()}
         onReset={vi.fn()}
-        onDownload={vi.fn()}
+        onDownloadJson={vi.fn()}
+        onDownloadCsv={vi.fn()}
       />,
     );
 
     expect(screen.getByText(/developer details/i)).toBeInTheDocument();
-    expect(screen.getByText('acknowledge_emotion')).toBeInTheDocument();
+    expect(screen.getAllByText('acknowledge_emotion').length).toBeGreaterThan(0);
     expect(screen.getByText(/not psychological diagnoses/i)).toBeInTheDocument();
     // RAG diagnostics: retrieval query and source metadata should be visible.
-    expect(screen.getByText(/risk concern fear probability/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/risk concern fear probability/i).length).toBeGreaterThan(0);
     expect(screen.getByText('How Breast Cancer Risk Assessment Tools Work')).toBeInTheDocument();
     expect(screen.getByText('0.531')).toBeInTheDocument();
     expect(screen.getByText(/all active entries are marked as vetted/i)).toBeInTheDocument();
@@ -139,7 +232,8 @@ describe('ChatInterface', () => {
         latestDiagnostics={null}
         onSendMessage={onSendMessage}
         onReset={vi.fn()}
-        onDownload={vi.fn()}
+        onDownloadJson={vi.fn()}
+        onDownloadCsv={vi.fn()}
       />,
     );
 
@@ -161,7 +255,8 @@ describe('ChatInterface', () => {
         latestDiagnostics={null}
         onSendMessage={vi.fn()}
         onReset={vi.fn()}
-        onDownload={vi.fn()}
+        onDownloadJson={vi.fn()}
+        onDownloadCsv={vi.fn()}
       />,
     );
 
@@ -179,17 +274,19 @@ describe('ChatInterface', () => {
         latestDiagnostics={null}
         onSendMessage={vi.fn()}
         onReset={vi.fn()}
-        onDownload={vi.fn()}
+        onDownloadJson={vi.fn()}
+        onDownloadCsv={vi.fn()}
       />,
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(/unable to reach the chat service/i);
   });
 
-  it('calls onReset and onDownload when their buttons are clicked', async () => {
+  it('calls onReset and download handlers when their buttons are clicked', async () => {
     const user = userEvent.setup();
     const onReset = vi.fn();
-    const onDownload = vi.fn();
+    const onDownloadJson = vi.fn();
+    const onDownloadCsv = vi.fn();
 
     render(
       <ChatInterface
@@ -200,7 +297,8 @@ describe('ChatInterface', () => {
         latestDiagnostics={null}
         onSendMessage={vi.fn()}
         onReset={onReset}
-        onDownload={onDownload}
+        onDownloadJson={onDownloadJson}
+        onDownloadCsv={onDownloadCsv}
       />,
     );
 
@@ -208,6 +306,8 @@ describe('ChatInterface', () => {
     expect(onReset).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole('button', { name: /download session json/i }));
-    expect(onDownload).toHaveBeenCalledTimes(1);
+    expect(onDownloadJson).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: /download session csv/i }));
+    expect(onDownloadCsv).toHaveBeenCalledTimes(1);
   });
 });

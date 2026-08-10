@@ -36,6 +36,16 @@ export default function ConsentScreen({
         </ul>
       </div>
 
+      <div className="disclaimer" role="note" aria-label="Data-handling disclosure">
+        <p className="disclaimer-title">How your messages are handled</p>
+        <p className="body-text">
+          When dynamic dialogue is enabled, messages from this demonstration chat are sent to
+          Groq for language processing. Do not enter names, contact details, medical-record
+          numbers, or other identifying information. When dynamic dialogue is unavailable, the
+          conversation is handled entirely by local, deterministic logic.
+        </p>
+      </div>
+
       <div className="consent-control">
         <input
           type="checkbox"

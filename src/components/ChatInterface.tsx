@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { ChatDiagnostics, ChatMessage as ChatMessageData, RiskResult } from '../types';
+import type { ChatDiagnostics, ChatMessage as ChatMessageData, ConfigStatus, RiskResult } from '../types';
 import AvatarPanel from './AvatarPanel';
 import ChatMessageItem from './ChatMessage';
 import DeveloperPanel from './DeveloperPanel';
@@ -11,9 +11,11 @@ interface ChatInterfaceProps {
   loading: boolean;
   error: string | null;
   latestDiagnostics: ChatDiagnostics | null;
+  configStatus?: ConfigStatus | null;
   onSendMessage: (text: string) => void;
   onReset: () => void;
-  onDownload: () => void;
+  onDownloadJson: () => void;
+  onDownloadCsv: () => void;
 }
 
 export default function ChatInterface({
@@ -22,9 +24,11 @@ export default function ChatInterface({
   loading,
   error,
   latestDiagnostics,
+  configStatus = null,
   onSendMessage,
   onReset,
-  onDownload,
+  onDownloadJson,
+  onDownloadCsv,
 }: ChatInterfaceProps) {
   const [draft, setDraft] = useState('');
   const listRef = useRef<HTMLUListElement>(null);
@@ -112,8 +116,11 @@ export default function ChatInterface({
         <button type="button" className="btn btn--ghost" onClick={onReset}>
           Reset Session
         </button>
-        <button type="button" className="btn btn--ghost" onClick={onDownload}>
+        <button type="button" className="btn btn--ghost" onClick={onDownloadJson}>
           Download Session JSON
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={onDownloadCsv}>
+          Download Session CSV
         </button>
       </div>
 
@@ -122,7 +129,7 @@ export default function ChatInterface({
         conditions or recommend treatment.
       </p>
 
-      <DeveloperPanel diagnostics={latestDiagnostics} />
+      <DeveloperPanel diagnostics={latestDiagnostics} configStatus={configStatus} />
     </div>
   );
 }

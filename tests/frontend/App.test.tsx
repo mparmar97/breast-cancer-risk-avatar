@@ -126,8 +126,9 @@ describe('App', () => {
     await user.click(screen.getByRole('checkbox', { name: /consent to continue/i }));
     await user.click(screen.getByRole('button', { name: /continue/i }));
 
-    expect(await screen.findByText(/mock risk calculator/i)).toBeInTheDocument();
+    expect(await screen.findByText(/breast cancer risk assessment/i)).toBeInTheDocument();
 
+    await user.click(screen.getByText(/quick demo scenarios/i));
     await user.click(screen.getByRole('button', { name: /test elevated-risk branch/i }));
 
     expect(await screen.findByText(/chat with the demonstration guide/i)).toBeInTheDocument();
@@ -148,6 +149,7 @@ describe('App', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /consent to continue/i }));
     await user.click(screen.getByRole('button', { name: /continue/i }));
+    await user.click(screen.getByText(/quick demo scenarios/i));
     await user.click(screen.getByRole('button', { name: /test average-risk branch/i }));
 
     expect(await screen.findByText(/chat with the demonstration guide/i)).toBeInTheDocument();
@@ -167,6 +169,7 @@ describe('App', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /consent to continue/i }));
     await user.click(screen.getByRole('button', { name: /continue/i }));
+    await user.click(screen.getByText(/quick demo scenarios/i));
     await user.click(screen.getByRole('button', { name: /test average-risk branch/i }));
 
     expect(await screen.findByText(/chat with the demonstration guide/i)).toBeInTheDocument();

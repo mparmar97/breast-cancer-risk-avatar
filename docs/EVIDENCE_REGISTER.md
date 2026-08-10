@@ -1,7 +1,7 @@
 # Evidence Register
 
 All active evidence chunks (`worker/rag/evidence.ts`) are now `status:
-"vetted"` and traceable to one of the 10 sources below (`worker/rag/
+"vetted"` and traceable to one of the sources below (`worker/rag/
 sourceRegistry.ts`). **"Vetted" here means the chunk's text is traced to a
 real, cited source with recorded URL/citation metadata — it does not mean
 this application, or this evidence collection, has been clinically
@@ -30,6 +30,9 @@ are the **only** sources ever retrieved for a chat reply.
 | `NCI-BREAST-RISK-FACTS` | Breast Cancer Risk in American Women | National Cancer Institute | government-patient-education | https://www.cancer.gov/types/breast/risk-fact-sheet | National Cancer Institute. Breast Cancer Risk in American Women. |
 | `NCI-BREAST-CHANGES` | Understanding Breast Changes and Conditions: A Health Guide | National Cancer Institute | government-patient-education | https://www.cancer.gov/publications/patient-education/understanding-breast-changes | National Cancer Institute. Understanding Breast Changes and Conditions: A Health Guide. Updated August 2024. |
 | `USPSTF-SCREENING-2024` | Breast Cancer: Screening | US Preventive Services Task Force | clinical-guideline | https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/breast-cancer-screening | US Preventive Services Task Force. Breast Cancer: Screening. Final Recommendation Statement. April 30, 2024. |
+| `NCI-PHYSICAL-ACTIVITY-FACT` | Physical Activity and Cancer Fact Sheet | National Cancer Institute | government-patient-education | https://www.cancer.gov/about-cancer/causes-prevention/risk/obesity/physical-activity-fact-sheet | National Cancer Institute. Physical Activity and Cancer Fact Sheet. |
+| `NCI-BREAST-PREVENTION-PDQ` | Breast Cancer Prevention (PDQ®)–Health Professional Version | National Cancer Institute | government-patient-education | https://www.cancer.gov/types/breast/hp/breast-prevention-pdq | National Cancer Institute. Breast Cancer Prevention (PDQ®)–Health Professional Version. |
+| `ACS-BREAST-RISK-PREVENTION` | Breast Cancer Risk and Prevention | American Cancer Society | professional-society-patient-education | https://www.cancer.org/cancer/types/breast-cancer/risk-and-prevention.html | American Cancer Society. Breast Cancer Risk and Prevention. |
 
 ### Medical RAG evidence chunks
 
@@ -48,6 +51,11 @@ are the **only** sources ever retrieved for a chat reply.
 | `nci-population-average-001` | NCI-BREAST-RISK-FACTS | population_vs_individual_risk | Population-level risks are averages; an individual's risk may be higher or lower. |
 | `nci-breast-change-followup-001` | NCI-BREAST-CHANGES | symptom_follow_up | New breast changes/abnormal results (not always cancer) should be discussed with a professional. |
 | `uspstf-average-screening-001` | USPSTF-SCREENING-2024 | average_risk_screening_context | 2024 USPSTF guidance: biennial mammography, average risk, ages 40–74 (general context only — see `clinicalUseRestriction` on this chunk; never turned into an individualized recommendation). |
+| `nci-physical-activity-breast-001` | NCI-PHYSICAL-ACTIVITY-FACT | physical_activity | Physically active women have lower breast cancer risk than inactive women (population-level association). |
+| `nci-physical-activity-guidelines-001` | NCI-PHYSICAL-ACTIVITY-FACT | lifestyle_risk | U.S. adult activity guidelines (150–300 min moderate / week, etc.) as general public-health guidance only. |
+| `nci-breast-prevention-exercise-001` | NCI-BREAST-PREVENTION-PDQ | physical_activity | Solid evidence links physical exercise with reduced breast cancer risk (~20% relative risk in studied populations). |
+| `acs-lifestyle-modifiable-001` | ACS-BREAST-RISK-PREVENTION | lifestyle_risk | Lifestyle-related factors (weight, activity, alcohol) may help lower risk at a population level; not a treatment substitute. |
+| `acs-first-steps-after-estimate-001` | ACS-BREAST-RISK-PREVENTION | health_first_steps | Constructive first steps: discuss estimate with a professional and support overall health (e.g. activity) — not a care protocol. |
 
 ## Dialogue-design sources
 
@@ -80,6 +88,11 @@ medication, or individualized screening/follow-up recommendation.**
   wording therefore comes from the local, deterministic template in
   `worker/llm/localGenerator.ts`, not from retrieved evidence — this is by
   design, since barriers are conversational, not factual, claims.
+- Lifestyle / fitness / initial healthy-step education is grounded by the
+  NCI physical-activity and ACS prevention chunks above. The avatar may use
+  Health Belief Model (perceived benefits / cue to action) and Motivational
+  Interviewing (autonomy-supportive next-step ask) to motivate — always at
+  population level, never as a personalized treatment or care protocol.
 - Adding, editing, or removing a source or chunk requires human review —
   see [`SOURCE_REPLACEMENT_CHECKLIST.md`](./SOURCE_REPLACEMENT_CHECKLIST.md)
   — and must keep `npm run evidence:check` passing with no errors.

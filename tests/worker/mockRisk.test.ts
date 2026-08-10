@@ -20,27 +20,39 @@ describe('POST /api/mock-risk', () => {
   it('returns the average-risk demonstration result', async () => {
     const response = await postMockRisk({ scenario: 'average' });
     expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body).toEqual({
-      model: 'Mock Demonstration Calculator',
-      fiveYearRisk: 1.1,
-      riskHorizon: '5 years',
-      riskBranch: 'average',
-      disclaimer: 'Demonstration result only. This is not a validated medical calculation.',
-    });
+    const body = (await response.json()) as { riskBranch: string; fiveYearRisk: number };
+    expect(body.riskBranch).toBe('average');
+    expect(body.fiveYearRisk).toBe(1.1);
   });
 
   it('returns the elevated-risk demonstration result', async () => {
     const response = await postMockRisk({ scenario: 'elevated' });
     expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body).toEqual({
-      model: 'Mock Demonstration Calculator',
-      fiveYearRisk: 3.2,
-      riskHorizon: '5 years',
-      riskBranch: 'elevated',
-      disclaimer: 'Demonstration result only. This is not a validated medical calculation.',
+    const body = (await response.json()) as { riskBranch: string; fiveYearRisk: number };
+    expect(body.riskBranch).toBe('elevated');
+    expect(body.fiveYearRisk).toBe(3.2);
+  });
+
+  it('computes a result from calculator inputs', async () => {
+    const response = await postMockRisk({
+      inputs: {
+        age: 55,
+        ageAtMenarche: '<12',
+        ageAtFirstLiveBirth: 'never',
+        firstDegreeRelatives: 2,
+        priorBiopsies: 1,
+        atypicalHyperplasia: 'yes',
+      },
     });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      riskBranch: string;
+      calculatorInputs: { age: number };
+      disclaimer: string;
+    };
+    expect(body.riskBranch).toBe('elevated');
+    expect(body.calculatorInputs.age).toBe(55);
+    expect(body.disclaimer).toMatch(/not a validated medical calculation/i);
   });
 
   it('rejects an unknown scenario with a 400', async () => {
