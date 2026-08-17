@@ -62,6 +62,26 @@ export function buildRetrievalSpec(input: BuildRetrievalSpecInput): RetrievalSpe
   }
 
   if (
+    turn.topic === 'calculator_applicability' &&
+    (turn.userConstraints.some((c) => /calculator purpose|how it works/i.test(c)) ||
+      /\b(gail|purpose|how .{0,24}works)\b/i.test(turn.explicitRequest))
+  ) {
+    const howWorks = turn.userConstraints.some((c) => /how it works/i.test(c));
+    return {
+      ...base,
+      query: normalizeText(
+        howWorks
+          ? 'Gail model breast cancer risk assessment tool how it estimates risk selected inputs probability'
+          : 'Gail model breast cancer risk assessment tool purpose estimate invasive breast cancer probability periods',
+      ),
+      required: true,
+      medicalRagRequired: true,
+      includeTopics: ['calculator_purpose', 'calculator_inputs'],
+      excludeTerms: ['mammogram', 'portal message', 'natural frequency', 'screening schedule'],
+    };
+  }
+
+  if (
     turn.requiresCalculatorMetadata ||
     turn.topic === 'calculator_validation' ||
     turn.topic === 'calculator_result_source' ||

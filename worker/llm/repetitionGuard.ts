@@ -1,12 +1,22 @@
 import { asksWhoToContact, asksRiskExplanation } from '../dialogue/normalizeUserText';
 import { expressesWorryOrOverwhelm } from '../behavioral/adaptiveSignalLexicon';
 import {
+  clinicianSpecialtyPrepFallback,
+  detectClinicianSpecialty,
+} from '../dialogue/clinicianSpecialty';
+import {
+  isLifestyleScheduleChoiceTurn,
+  namesChosenScheduleSlot,
+  previousAskedLifestyleScheduleChoice,
+} from '../dialogue/lifestyleActivitySignals';
+import {
   GENERIC_HELPFUL_FALLBACK,
   GRATITUDE_FALLBACK,
   WHO_TO_CONTACT_FALLBACK,
   riskExplanationFallback,
   understandingNextStepFallback,
 } from './fallbackCopy';
+import { lifestyleScheduleLockInFallback } from './planAwareFallback';
 import { isClosingUtterance, isGratitudeUtterance } from '../dialogue/closingSignals';
 import { assertsUnderstandingUtterance } from '../dialogue/understandingSignals';
 import { generateLocalResponse } from './localGenerator';
@@ -28,22 +38,39 @@ function lastResortNonRepeatingReply(
   ) {
     return 'Coming back to the schedule concern: calling during work can be hard. A written option when available, or saving the question for a time that fits better, may be more manageable than trying to phone during busy hours.';
   }
+  if (
+    isLifestyleScheduleChoiceTurn(latest, input.recentAssistantMessages?.[0]) ||
+    (namesChosenScheduleSlot(latest) &&
+      previousAskedLifestyleScheduleChoice(input.recentAssistantMessages?.[0]))
+  ) {
+    return lifestyleScheduleLockInFallback(
+      latest,
+      input.recentAssistantMessages?.[0],
+      input.retrievedEvidence,
+    );
+  }
   if (/\b(i like|i love|i enjoy|doing gym|the gym|walking|yoga|swimming)\b/i.test(latest)) {
     return 'Regular physical activity is associated with lower breast cancer risk at a population level. Keeping an activity you already like—such as gym time—is a practical maintenance step. This is general encouragement, not a personalized training plan. What would help you keep that activity consistent this week?';
   }
-  if (/\b(motivate|motivation|motivational|encourage me|cheer me)\b/i.test(latest)) {
+  if (
+    /\b(motivate|motivated|motivation|motivational|encourage me|cheer me|tips?.{0,40}(yoga|routine|habit)|set(ting)? up .{0,16}routine)\b/i.test(
+      latest,
+    )
+  ) {
     return /\b(every ?day|daily|each day)\b/i.test(latest)
       ? 'I can offer educational motivational support in this conversation, though I cannot send daily check-ins outside the session. Regular physical activity is linked with lower breast cancer risk at a population level. What is one healthy habit or activity you want to focus on right now?'
       : 'I can offer educational motivational support in this session—not daily coaching or a personalized training plan. Regular physical activity is linked with lower breast cancer risk at a population level. What is one healthy habit or activity you want to focus on right now?';
   }
   if (
-    /\b(physical activity|exercise|fitness|life[- ]?style|motivational guide|maintain .{0,40}activity)\b/i.test(
+    /\b(physical activity|exercise|fitness|life[- ]?style|motivational guide|maintain .{0,40}activity|daily routine|reduce .{0,40}risk|fit .{0,30}(routine|day|schedule))\b/i.test(
       latest,
     )
   ) {
     return 'I can support you as an educational motivational guide for keeping activity in your routine—not as a personal trainer or treatment planner. Regular movement is linked with lower breast cancer risk at a population level. What is one small activity you could keep this week?';
   }
   if (asksWhoToContact(latest)) return WHO_TO_CONTACT_FALLBACK;
+  const specialty = detectClinicianSpecialty(latest);
+  if (specialty) return clinicianSpecialtyPrepFallback(specialty);
   if (asksRiskExplanation(latest)) return riskExplanationFallback(input.riskResult);
   if (assertsUnderstandingUtterance(latest)) return understandingNextStepFallback(input.riskResult);
   if (isGratitudeUtterance(latest) || isClosingUtterance(latest)) {
@@ -51,6 +78,12 @@ function lastResortNonRepeatingReply(
   }
   if (expressesWorryOrOverwhelm(latest)) {
     return 'It sounds like seeing this result has been worrying. A risk estimate is not a diagnosis. What part of the result feels most concerning?';
+  }
+  if (/\b(script|what to say|what to write|draft)\b/i.test(latest)) {
+    if (/\b(call|phone|office)\b/i.test(latest)) {
+      return 'You can use this phone script as written: "Hi, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. I would like to discuss what this number means for me." Feel free to edit any wording.';
+    }
+    return 'You can use this editable draft as written: "Hello, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. Please advise whether a discussion would be appropriate." Feel free to edit any wording.';
   }
   return GENERIC_HELPFUL_FALLBACK;
 }
@@ -150,6 +183,8 @@ const DIALOGUE_MOVE_PATTERNS: Record<string, RegExp> = {
   broad_readiness_question: /\bhow do you currently feel about discussing this result\b/i,
   choose_action_question: /\bwhat action feels realistic\b|\bwould writing a brief portal message or\b/i,
   barrier_statement: /\bit sounds like .{0,40} (is|may be) (the main obstacle|making follow-up)\b/i,
+  lifestyle_schedule_clarify:
+    /\bwhich part of (your )?(workday|morning|evening|afternoon|day|routine|schedule)\b|\bmost doable for a short\b|\bwhen (in|during) your (day|routine|morning|workday)\b/i,
 };
 
 const OPENING_CLICHE_PATTERN =
@@ -337,6 +372,36 @@ export async function applyRepetitionGuard(
 
   if (regenerated.responseMode === 'groq-dynamic-rag') {
     const regenerationAnalysis = analyzeRepetition(regenerated.reply, input.recentAssistantMessages);
+    // Lifestyle schedule loops: if Groq keeps nesting which-part timing asks after the
+    // user already chose a slot, advance with a local lock-in instead of looping.
+    const userChoseScheduleSlot = isLifestyleScheduleChoiceTurn(
+      input.latestMessage,
+      input.recentAssistantMessages?.[0],
+    );
+    const stillScheduleClarify =
+      /lifestyle_schedule_clarify/.test(
+        `${analysis.repeatedDialogueMove ?? ''} ${regenerationAnalysis.repeatedDialogueMove ?? ''}`,
+      ) ||
+      previousAskedLifestyleScheduleChoice(regenerated.reply) ||
+      previousAskedLifestyleScheduleChoice(candidate.reply);
+    if (userChoseScheduleSlot && stillScheduleClarify) {
+      return {
+        reply: lifestyleScheduleLockInFallback(
+          input.latestMessage,
+          input.recentAssistantMessages?.[0],
+          input.retrievedEvidence,
+          input.semanticTurn,
+        ),
+        usedEvidenceIds: (input.retrievedEvidence ?? []).slice(0, 2).map((item) => item.id),
+        responseMode: 'local-rag-fallback',
+        fallbackReason: 'generation_validation_failure',
+        repetitionDetected: true,
+        regenerationUsed: true,
+        similarityScore: regenerationAnalysis.similarityScore,
+        repeatedDialogueMove: 'lifestyle_schedule_clarify',
+        regenerationRequired: true,
+      };
+    }
     // Prefer Groq even when still similar — do not replace with local templates.
     return {
       ...regenerated,

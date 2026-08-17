@@ -13,7 +13,9 @@ import {
   asksMotivationSupport,
   extractChosenActivityLabel,
   isLifestyleActivityChoiceTurn,
+  isLifestyleScheduleChoiceTurn,
 } from '../dialogue/lifestyleActivitySignals';
+import { lifestyleScheduleLockInFallback } from './planAwareFallback';
 import {
   asksWhoToContact,
   asksRiskExplanation,
@@ -22,6 +24,10 @@ import {
   normalizeUserText,
 } from '../dialogue/normalizeUserText';
 import { isClosingUtterance, isGratitudeUtterance } from '../dialogue/closingSignals';
+import {
+  clinicianSpecialtyPrepFallback,
+  detectClinicianSpecialty,
+} from '../dialogue/clinicianSpecialty';
 import {
   GRATITUDE_FALLBACK,
   riskExplanationFallback,
@@ -199,7 +205,10 @@ function wantsDualChoiceClarification(input: LocalResponseInput): boolean {
 }
 
 const DRAFT_HELP_RESPONSE =
-  'Here is a short editable draft you could adapt: "Hello, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. Please advise whether a discussion would be appropriate." Would you like to revise any part of it?';
+  'Here is a short editable draft you could adapt: "Hello, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. Please advise whether a discussion would be appropriate."';
+
+const PHONE_SCRIPT_RESPONSE =
+  'Here is a short editable phone script you could use: "Hi, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. I would like to discuss what this number means for me." You can change any wording before you call.';
 
 const CLINICIAN_QUESTIONS_RESPONSE =
   'Here are some general questions people often ask a healthcare professional about a demonstration risk estimate: What does this estimate mean for me personally? Which parts of my personal or family history matter most here? Are any follow-up discussions or tests appropriate for my situation? What should I watch for or ask about next? These are general preparation ideas, not a personalized care plan.';
@@ -270,6 +279,24 @@ export function generateLocalResponse(input: LocalResponseInput): string {
       ? 'I can offer educational motivational support in this conversation, though I cannot send daily check-ins outside the session. Regular physical activity is linked with lower breast cancer risk at a population level. What is one healthy habit or activity you want to focus on right now?'
       : 'I can offer educational motivational support in this session—not daily coaching or a personalized training plan. Regular physical activity is linked with lower breast cancer risk at a population level. What is one healthy habit or activity you want to focus on right now?';
   }
+  // Lifestyle schedule choice (e.g. "morning" / "before work") — lock in, do not re-ask which part.
+  if (
+    isLifestyleScheduleChoiceTurn(
+      latestForChoice,
+      input.recentAssistantMessages?.[0],
+      input.conversationMemory?.lastRouteTopic,
+    ) ||
+    (input.requestInterpretation?.semanticTurn?.topic === 'lifestyle_risk_information' &&
+      /chosen schedule:/i.test(input.requestInterpretation.semanticTurn.userConstraints.join(' ')))
+  ) {
+    return lifestyleScheduleLockInFallback(
+      latestForChoice,
+      input.recentAssistantMessages?.[0],
+      evidence,
+      input.requestInterpretation?.semanticTurn,
+    );
+  }
+
   // Lifestyle activity choice (e.g. "I like doing gym") — reinforce, do not use clinician action-planning.
   if (
     isLifestyleActivityChoiceTurn(
@@ -328,7 +355,11 @@ export function generateLocalResponse(input: LocalResponseInput): string {
   }
 
   if (wantsDraft) {
-    return DRAFT_HELP_RESPONSE;
+    const phoneSelected =
+      /\b(phone|call)\b/i.test(selectedOption ?? '') ||
+      /\b(phone|call)\b/i.test(input.conversationMemory?.selectedCommunicationOption ?? '') ||
+      /\b(phone|call|office|script)\b/i.test(input.latestMessage ?? '');
+    return phoneSelected ? PHONE_SCRIPT_RESPONSE : DRAFT_HELP_RESPONSE;
   }
   if (
     primaryIntent === 'confirm_proposed_action' ||
@@ -350,6 +381,13 @@ export function generateLocalResponse(input: LocalResponseInput): string {
       primaryIntent !== 'request_draft_help' &&
       !wantsDraft)
   ) {
+    const specialty =
+      detectClinicianSpecialty(input.latestMessage ?? '') ||
+      (selectedOption ? detectClinicianSpecialty(selectedOption) : null) ||
+      (input.requestInterpretation?.entities?.selectedOption
+        ? detectClinicianSpecialty(input.requestInterpretation.entities.selectedOption)
+        : null);
+    if (specialty) return clinicianSpecialtyPrepFallback(specialty);
     const wantsDetail =
       /detailed/i.test(dialogueTurnPlan?.mustAddress?.join(' ') ?? '') ||
       /detailed/i.test(input.requestInterpretation?.explicitRequest ?? '') ||
@@ -357,7 +395,10 @@ export function generateLocalResponse(input: LocalResponseInput): string {
     return wantsDetail ? CLINICIAN_QUESTIONS_DETAILED_RESPONSE : CLINICIAN_QUESTIONS_RESPONSE;
   }
   if (decisionSupportStrategy === 'prepare_questions' && selectedOption) {
-    return primaryIntent === 'request_draft_help' ? DRAFT_HELP_RESPONSE : CLINICIAN_QUESTIONS_RESPONSE;
+    if (primaryIntent === 'request_draft_help' || /\b(phone|call)\b/i.test(selectedOption)) {
+      return /\b(phone|call)\b/i.test(selectedOption) ? PHONE_SCRIPT_RESPONSE : DRAFT_HELP_RESPONSE;
+    }
+    return CLINICIAN_QUESTIONS_RESPONSE;
   }
   if (
     primaryIntent === 'request_draft_review' ||
@@ -366,8 +407,12 @@ export function generateLocalResponse(input: LocalResponseInput): string {
   ) {
     return DRAFT_REVIEW_RESPONSE;
   }
-  if (selectedOption && /portal/i.test(selectedOption) && decisionSupportStrategy === 'clarify_preferences') {
-    return SELECTED_OPTION_RESPONSE;
+  if (
+    selectedOption &&
+    (/\bportal\b/i.test(selectedOption) || /\b(phone|call)\b/i.test(selectedOption)) &&
+    decisionSupportStrategy === 'clarify_preferences'
+  ) {
+    return /\b(phone|call)\b/i.test(selectedOption) ? PHONE_SCRIPT_RESPONSE : SELECTED_OPTION_RESPONSE;
   }
   if (strategy === 'ask_clarification' && wantsDualChoiceClarification(input)) {
     return DUAL_CHOICE_CLARIFICATION;
@@ -375,6 +420,11 @@ export function generateLocalResponse(input: LocalResponseInput): string {
 
   if (asksWhoToContact(input.latestMessage ?? '')) {
     return WHO_TO_CONTACT_FALLBACK;
+  }
+
+  const namedSpecialty = detectClinicianSpecialty(input.latestMessage ?? '');
+  if (namedSpecialty) {
+    return clinicianSpecialtyPrepFallback(namedSpecialty);
   }
 
   if (
@@ -396,6 +446,9 @@ export function generateLocalResponse(input: LocalResponseInput): string {
     primaryGoal === 'provide_practical_help' ||
     decisionSupportStrategy === 'clarify_options'
   ) {
+    if (selectedOption && /\b(phone|call)\b/i.test(selectedOption)) {
+      return PHONE_SCRIPT_RESPONSE;
+    }
     return selectedOption && /portal/i.test(selectedOption) ? SELECTED_OPTION_RESPONSE : NEXT_STEP_RESPONSE;
   }
 
@@ -426,10 +479,14 @@ export function generateLocalResponse(input: LocalResponseInput): string {
   // Memory-aware fallbacks for action/readiness paths only.
   if (
     (draftAccepted || timingKnown) &&
-    (strategy === 'action_planning' ||
-      strategy === 'explore_readiness' ||
-      strategy === 'confirm_progress' ||
-      strategy === 'support_self_efficacy')
+    (
+      [
+        'action_planning',
+        'explore_readiness',
+        'confirm_progress',
+        'support_self_efficacy',
+      ] as string[]
+    ).includes(strategy)
   ) {
     if (timingKnown) {
       const timing = input.conversationMemory?.plannedTiming ?? input.actionTiming ?? 'tonight';

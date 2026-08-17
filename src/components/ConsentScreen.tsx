@@ -33,6 +33,11 @@ export default function ConsentScreen({
           <li>It <strong>cannot diagnose</strong> breast cancer or any other condition.</li>
           <li>It <strong>cannot recommend treatment</strong> of any kind.</li>
           <li>All risk results shown are demonstration data, not validated medical calculations.</li>
+          <li>
+            Please ask about the demonstration risk estimate, calculator meaning, general
+            healthy-habit education, or sample clinician questions—not out-of-scope topics
+            such as product recommendations or personal medical advice.
+          </li>
         </ul>
       </div>
 

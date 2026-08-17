@@ -17,6 +17,7 @@ export default function App() {
     resetSession,
     downloadSessionJson,
     downloadSessionCsv,
+    setLiveAvatarExportMeta,
   } = useSession();
 
   return (
@@ -50,6 +51,7 @@ export default function App() {
           onReset={resetSession}
           onDownloadJson={downloadSessionJson}
           onDownloadCsv={downloadSessionCsv}
+          onLiveAvatarExportMeta={setLiveAvatarExportMeta}
         />
       )}
     </main>

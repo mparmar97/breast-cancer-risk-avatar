@@ -7,17 +7,26 @@ import type { ConversationMemory } from '../dialogue/conversationMemory';
 import type { ResponsePlan } from '../dialogue/deriveResponsePlan';
 import {
   asksMotivationSupport,
+  extractActivityFromAssistantReply,
   extractChosenActivityLabel,
+  extractChosenScheduleLabel,
   namesChosenActivity,
+  namesChosenScheduleSlot,
   previousAskedLifestyleActivityChoice,
+  previousAskedLifestyleScheduleChoice,
 } from '../dialogue/lifestyleActivitySignals';
 import { asksWhoToContact } from '../dialogue/normalizeUserText';
-import type { SemanticTurn } from '../dialogue/semanticTurn';
+import {
+  clinicianSpecialtyPrepFallback,
+  detectClinicianSpecialty,
+} from '../dialogue/clinicianSpecialty';
+import { asksPostDiagnosisOrTreatmentCare, type SemanticTurn } from '../dialogue/semanticTurn';
 import type { NaturalFrequencyResult } from '../risk/convertRiskToNaturalFrequency';
 import type { RetrievedEvidence } from '../rag/types';
 import type { RiskResult } from '../types';
 import { isGratitudeUtterance } from '../dialogue/closingSignals';
 import {
+  GENERIC_HELPFUL_FALLBACK,
   GRATITUDE_FALLBACK,
   understandingNextStepFallback,
   WHO_TO_CONTACT_FALLBACK,
@@ -49,6 +58,100 @@ function lifestyleUserText(turn: SemanticTurn): string {
     .toLowerCase();
 }
 
+function turnUserText(turn: SemanticTurn, latestMessage?: string): string {
+  return [latestMessage ?? '', lifestyleUserText(turn)].join(' ').toLowerCase();
+}
+
+function isRiskEstimateFocus(text: string): boolean {
+  return /\b(risk estimate|demonstration (risk|estimate)|five[- ]?year|5[- ]?year|lifetime risk|percent(?:age)?|probability|what (does|do) (this|the|my) (number|result|estimate|risk)|natural frequency|out of 100|how (is|was) (this|the) (number|estimate|risk) (calculated|computed))\b/i.test(
+    text,
+  );
+}
+
+/** Prefer vetted medical chunks; skip dialogue-design theory snippets. */
+function vettedEducationalChunks(evidence?: RetrievedEvidence[]): RetrievedEvidence[] {
+  return (evidence ?? []).filter(
+    (item) =>
+      item.status === 'vetted' &&
+      Boolean(item.text?.trim()) &&
+      item.topic !== 'fuzzy_trace_gist' &&
+      item.topic !== 'avatar_risk_communication' &&
+      !item.id.startsWith('reyna-') &&
+      !item.id.startsWith('wolfe-'),
+  );
+}
+
+function composeEvidenceFallback(
+  evidence: RetrievedEvidence[] | undefined,
+  parts: { lead?: string; boundary: string; followUp?: string; maxChunks?: number },
+): string {
+  const chunks = vettedEducationalChunks(evidence).slice(0, parts.maxChunks ?? 2);
+  const body = chunks.map((item) => item.text.trim()).join(' ');
+  return [parts.lead, body, parts.boundary, parts.followUp]
+    .filter((part) => Boolean(part && String(part).trim()))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Topic-aware local fallback when Groq is unavailable: use RAG when present,
+ * avoid dumping the demonstration risk % for unrelated / out-of-scope asks.
+ */
+function educationalQuestionFallback(
+  turn: SemanticTurn,
+  risk: RiskResult,
+  calc: NaturalFrequencyResult | null | undefined,
+  evidence: RetrievedEvidence[] | undefined,
+  latestMessage?: string,
+): string {
+  const userText = turnUserText(turn, latestMessage);
+
+  if (asksPostDiagnosisOrTreatmentCare(userText)) {
+    return composeEvidenceFallback(evidence, {
+      lead:
+        'Questions about what to change or try after a cancer diagnosis need individualized guidance from your clinical team—this educational guide cannot prescribe treatment, medications, lifestyle protocols, or a post-diagnosis care plan.',
+      boundary:
+        'A qualified healthcare professional who knows your full history is the right place for those decisions.',
+      followUp:
+        'I can still help explain the demonstration risk estimate, general visit-preparation ideas, or sample questions to bring to that conversation. Which would be most useful right now?',
+      maxChunks: 1,
+    });
+  }
+
+  if (turn.requiresSafetyBoundary) {
+    return composeEvidenceFallback(evidence, {
+      lead: 'I cannot diagnose conditions or recommend treatment.',
+      boundary:
+        'I can help explain what this demonstration risk estimate means in general terms, or suggest questions for a healthcare professional.',
+      followUp: 'What would be most useful right now?',
+      maxChunks: 1,
+    });
+  }
+
+  if (
+    isRiskEstimateFocus(userText) ||
+    turn.topic === 'risk_meaning' ||
+    turn.topic === 'risk_level' ||
+    turn.topic === 'time_horizon'
+  ) {
+    return factualComponent(turn, risk, calc);
+  }
+
+  const composed = composeEvidenceFallback(evidence, {
+    boundary:
+      'This is general educational information from vetted sources, not personalized medical advice or a care plan.',
+    followUp:
+      'I can also clarify the demonstration risk estimate, next-step options, or sample questions for a healthcare professional—what would help next?',
+    maxChunks: 2,
+  });
+  if (vettedEducationalChunks(evidence).length > 0) {
+    return composed;
+  }
+
+  return GENERIC_HELPFUL_FALLBACK;
+}
+
 function lifestyleActivityReinforcementFallback(
   turn: SemanticTurn,
   latestMessage: string,
@@ -67,6 +170,34 @@ function lifestyleActivityReinforcementFallback(
   return `${benefit} Choosing ${activity} is a practical way to keep movement in your routine—sticking with something you already like often makes maintenance easier. This is general educational encouragement, not a personalized training or treatment plan. What would help you keep ${activity} consistent this week?`;
 }
 
+/** Affirm a chosen time slot; never ask another nested which-part timing question. */
+export function lifestyleScheduleLockInFallback(
+  latestMessage: string,
+  previousAssistantReply?: string | null,
+  evidence?: RetrievedEvidence[],
+  turn?: SemanticTurn | null,
+): string {
+  const slotConstraint = turn?.userConstraints.find((c) => /chosen schedule:/i.test(c));
+  const activityConstraint = turn?.userConstraints.find((c) => /chosen activity:/i.test(c));
+  const slot =
+    slotConstraint?.replace(/^chosen schedule:\s*/i, '').trim() ||
+    extractChosenScheduleLabel(latestMessage);
+  const activity =
+    activityConstraint?.replace(/^chosen activity:\s*/i, '').trim() ||
+    extractActivityFromAssistantReply(previousAssistantReply) ||
+    'movement';
+  const activityChunk = evidence?.find(
+    (item) =>
+      item.topic === 'physical_activity' ||
+      item.id.includes('physical-activity') ||
+      item.id.includes('prevention-exercise'),
+  );
+  const benefit = activityChunk
+    ? activityChunk.text
+    : 'Regular physical activity is associated with lower breast cancer risk at a population level.';
+  return `${benefit} Planning ${activity} ${slot} is a practical way to fit movement into a busy day—protecting that small, repeatable window often matters more than finding a perfect workout. This is general educational encouragement, not a personalized training plan. What would help you protect that ${slot} slot this week?`;
+}
+
 function lifestyleMotivationFallback(
   turn: SemanticTurn,
   evidence?: RetrievedEvidence[],
@@ -74,6 +205,20 @@ function lifestyleMotivationFallback(
   recentAssistantMessages?: string[],
 ): string {
   const userText = `${latestMessage ?? ''} ${lifestyleUserText(turn)}`.toLowerCase();
+  const priorScheduleAsk = previousAskedLifestyleScheduleChoice(recentAssistantMessages?.[0]);
+  if (
+    (namesChosenScheduleSlot(latestMessage || userText) &&
+      (priorScheduleAsk || /chosen schedule:/i.test(turn.userConstraints.join(' ')))) ||
+    /lock in the user's chosen activity schedule/i.test(turn.explicitRequest)
+  ) {
+    return lifestyleScheduleLockInFallback(
+      latestMessage || userText,
+      recentAssistantMessages?.[0],
+      evidence,
+      turn,
+    );
+  }
+
   const priorAsk = previousAskedLifestyleActivityChoice(recentAssistantMessages?.[0]);
   if (
     namesChosenActivity(latestMessage || userText) &&
@@ -102,7 +247,9 @@ function lifestyleMotivationFallback(
   );
 
   if (wantsMotivationSupport) {
-    const dailyAsk = /\b(every ?day|daily|each day)\b/.test(userText);
+    // Only the user's wording — not internal plan text that mentions "daily coaching".
+    const userOnlyText = `${latestMessage ?? ''} ${turn.propositions.map((p) => p.text).join(' ')} ${turn.userQuestions.join(' ')}`.toLowerCase();
+    const dailyAsk = /\b(every ?day|daily|each day)\b/.test(userOnlyText);
     if (activityChunk) {
       return `${activityChunk.text} I can offer educational motivational support while we talk here${dailyAsk ? '—I cannot send daily reminders outside this session' : ''}. Choosing one small, repeatable step often helps people stay motivated. This is not a personalized training or treatment plan. What is one healthy habit or activity you want to focus on right now?`;
     }
@@ -156,6 +303,14 @@ function factualComponent(turn: SemanticTurn, risk: RiskResult, calc?: NaturalFr
     case 'list_information':
     case 'answer_factual_question':
       if (turn.topic === 'calculator_inputs') {
+        const biopsyFocus = turn.userConstraints.some((c) => /biopsy/i.test(c));
+        if (biopsyFocus) {
+          return (
+            'Some breast-cancer risk tools include previous breast biopsies among the information they use, along with age, reproductive history, and family history. ' +
+            'A recent biopsy does not by itself tell what will happen for one person, and this guide cannot give a personal risk number from a biopsy history. ' +
+            'A qualified healthcare professional can interpret biopsy results and risk factors with a fuller clinical history.'
+          );
+        }
         const base =
           'Risk calculators typically use information such as age, reproductive and family-history factors, and related clinical inputs listed by the tool.';
         if (turn.secondaryOperations.includes('identify_limitation')) {
@@ -165,6 +320,29 @@ function factualComponent(turn: SemanticTurn, risk: RiskResult, calc?: NaturalFr
       }
       if (turn.topic === 'calculator_validation' || turn.topic === 'calculator_result_source') {
         return 'This demonstration uses example calculator inputs for education. It is not based on a complete personal clinical record from your own medical chart.';
+      }
+      if (turn.topic === 'calculator_applicability') {
+        if (turn.userConstraints.some((c) => /how it works/i.test(c))) {
+          return (
+            'The Gail model / breast-cancer risk assessment tool estimates the chance of developing invasive breast cancer over specified periods using selected inputs such as age, reproductive and family-history factors, and related clinical information. ' +
+            'It produces a population-level probability for people with similar inputs, not a personal diagnosis.'
+          );
+        }
+        return (
+          'The Gail model is used in breast-cancer risk assessment tools to estimate the probability of developing invasive breast cancer over specified periods of time. ' +
+          'It is an educational risk estimate for people with similar calculator information, not a diagnosis of current cancer.'
+        );
+      }
+      if (
+        turn.topic === 'professional_interpretation' ||
+        turn.topic === 'unclear' ||
+        turn.directAnswerRequired
+      ) {
+        // Risk % is only appropriate when the ask is about the estimate itself.
+        const ask = lifestyleUserText(turn);
+        if (!isRiskEstimateFocus(ask)) {
+          return GENERIC_HELPFUL_FALLBACK;
+        }
       }
       return `A risk estimate of about ${percent}% over ${horizon} describes probability for people with similar calculator information.`;
     case 'identify_limitation':
@@ -211,14 +389,25 @@ function factualComponent(turn: SemanticTurn, risk: RiskResult, calc?: NaturalFr
     }
     case 'draft':
     case 'revise': {
+      const phone =
+        /\b(phone|call)\b/i.test(turn.entities.selectedOption ?? '') ||
+        /\bphone-call script|calling the office\b/i.test(turn.explicitRequest);
+      const portal =
+        /\bportal\b/i.test(turn.entities.selectedOption ?? '') ||
+        /\bportal-message|patient portal|written clinic message\b/i.test(turn.explicitRequest) ||
+        constraints.some((c) => /portal/i.test(c));
+      if (phone && !portal) {
+        return `Here is a short editable phone script you could use: "Hi, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. I would like to discuss what this number means for me." You can change any wording before you call.`;
+      }
       if (constraints.some((c) => /appointment/.test(c))) {
         return `Here is a revised draft: "Hello, I received a demonstration breast-cancer risk estimate and would like help interpreting it with my family history. Thank you."`;
       }
       if (
-        constraints.some((c) => /short|formal/.test(c)) ||
+        constraints.some((c) => /short|formal|portal/.test(c)) ||
+        portal ||
         (turn.topic === 'message_drafting' && !turn.entities.draftText)
       ) {
-        return `Here is a short editable draft: "Hi, I got a demo breast-cancer risk estimate and would like help understanding it with my personal and family history. Thanks." You can change any wording before sending.`;
+        return `Here is a short editable portal message you could send: "Hi, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. Could we discuss what this number means for me?" You can change any wording before sending.`;
       }
       return `Here is a short editable draft you could adapt: "Hello, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history."`;
     }
@@ -306,8 +495,20 @@ function fearsCurrentCancerFromTurn(turn: SemanticTurn): boolean {
 
 export function generatePlanAwareFallback(input: PlanAwareFallbackInput): string {
   const { semanticTurn, plan, riskResult, calculation, conversationMemory } = input;
-  if (semanticTurn.requiresSafetyBoundary && semanticTurn.topic !== 'screening_guidance') {
-    return 'I cannot diagnose conditions or recommend treatment. I can help explain what this demonstration risk estimate means in general terms.';
+  const latestMessage = input.latestMessage;
+  const retrievedEvidence = input.retrievedEvidence;
+  if (
+    (semanticTurn.requiresSafetyBoundary && semanticTurn.topic !== 'screening_guidance') ||
+    plan.primaryGoal === 'maintain_safety' ||
+    asksPostDiagnosisOrTreatmentCare(turnUserText(semanticTurn, latestMessage))
+  ) {
+    return educationalQuestionFallback(
+      semanticTurn,
+      riskResult,
+      calculation,
+      retrievedEvidence,
+      latestMessage,
+    );
   }
 
   if (
@@ -323,6 +524,16 @@ export function generatePlanAwareFallback(input: PlanAwareFallbackInput): string
   const requestText = `${semanticTurn.explicitRequest} ${semanticTurn.propositions.map((p) => p.text).join(' ')}`;
   if (semanticTurn.barrier === 'access' || asksWhoToContact(requestText)) {
     return WHO_TO_CONTACT_FALLBACK;
+  }
+
+  const specialtyFromTurn =
+    (semanticTurn.entities.selectedOption
+      ? detectClinicianSpecialty(semanticTurn.entities.selectedOption)
+      : null) ||
+    detectClinicianSpecialty(input.latestMessage ?? '') ||
+    detectClinicianSpecialty(requestText);
+  if (specialtyFromTurn) {
+    return clinicianSpecialtyPrepFallback(specialtyFromTurn);
   }
 
   // Progress emotion / diagnosis-fear turns instead of repeating "what feels most concerning?"
@@ -449,6 +660,24 @@ export function generatePlanAwareFallback(input: PlanAwareFallbackInput): string
     return 'This demonstration uses example calculator inputs for education. It is not based on a complete personal clinical record from your own medical chart.';
   }
 
+  // Random / educational asks when Groq is down: prefer RAG + topic boundary over risk %.
+  if (
+    plan.primaryGoal === 'answer_question' ||
+    semanticTurn.primaryOperation === 'answer_factual_question' ||
+    (semanticTurn.directAnswerRequired &&
+      !/explain_|correct_|convert_|simplify_|list_|provide_|address_|acknowledge_|close_|open_|clarify_/i.test(
+        plan.primaryGoal,
+      ))
+  ) {
+    return educationalQuestionFallback(
+      semanticTurn,
+      riskResult,
+      calculation,
+      retrievedEvidence,
+      latestMessage,
+    );
+  }
+
   const percent = calculation?.originalRiskPercent ?? semanticTurn.entities.riskValue ?? riskResult.fiveYearRisk;
   const horizonRaw = calculation?.timeHorizon ?? semanticTurn.entities.timeHorizon ?? riskResult.riskHorizon;
   const horizon = /five|5\s*year/i.test(String(horizonRaw)) ? 'five years' : String(horizonRaw);
@@ -491,6 +720,13 @@ export function generatePlanAwareFallback(input: PlanAwareFallbackInput): string
     case 'compare_time_horizons':
       return `Five-year risk looks at a nearer window, while lifetime risk covers a much longer span. Both are probabilities for groups with similar inputs, not individual predictions.`;
     case 'explain_calculator_inputs': {
+      if (semanticTurn.userConstraints.some((c) => /biopsy/i.test(c))) {
+        return (
+          'Some breast-cancer risk tools include previous breast biopsies among the information they use, along with age, reproductive history, and family history. ' +
+          'A recent biopsy does not by itself tell what will happen for one person, and this guide cannot give a personal risk number from a biopsy history. ' +
+          'A qualified healthcare professional can interpret biopsy results and risk factors with a fuller clinical history.'
+        );
+      }
       const base =
         'Risk calculators typically use information such as age, reproductive and family-history factors, and related clinical inputs listed by the tool.';
       if (
@@ -502,6 +738,16 @@ export function generatePlanAwareFallback(input: PlanAwareFallbackInput): string
       }
       return `${base} The exact inputs depend on the specific calculator version being demonstrated.`;
     }
+    case 'explain_calculator_purpose':
+      return (
+        'The Gail model is used in breast-cancer risk assessment tools to estimate the probability of developing invasive breast cancer over specified periods of time. ' +
+        'It is an educational risk estimate for people with similar calculator information, not a diagnosis of current cancer.'
+      );
+    case 'explain_calculator_how_it_works':
+      return (
+        'The Gail model / breast-cancer risk assessment tool estimates the chance of developing invasive breast cancer over specified periods using selected inputs such as age, reproductive and family-history factors, and related clinical information. ' +
+        'It produces a population-level probability for people with similar inputs, not a personal diagnosis.'
+      );
     case 'explain_calculator_limitations':
       return `A calculator estimates probability for people with similar input information. It cannot predict exactly what will happen to one person because individual outcomes also depend on factors the tool does not fully capture.`;
     case 'address_practical_barrier':
@@ -532,7 +778,7 @@ export function generatePlanAwareFallback(input: PlanAwareFallbackInput): string
   const factual = factualComponent(semanticTurn, riskResult, calculation);
   const qualification = qualificationComponent(semanticTurn);
   let question = '';
-  if (plan.shouldAskQuestion && semanticTurn.primaryOperation === 'address_barrier') {
+  if (plan.shouldAskQuestion && String(semanticTurn.primaryOperation) === 'address_barrier') {
     question =
       plan.questionPurpose?.includes('written') ||
       /call|work/i.test(barrierEvidenceOf(semanticTurn))

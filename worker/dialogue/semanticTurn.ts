@@ -18,11 +18,15 @@ import {
 import { isClosingUtterance, isGratitudeUtterance } from './closingSignals';
 import {
   asksMotivationSupport,
+  extractActivityFromAssistantReply,
   extractChosenActivityLabel,
+  extractChosenScheduleLabel,
   isLifestyleActivityChoiceTurn,
+  isLifestyleScheduleChoiceTurn,
 } from './lifestyleActivitySignals';
 import { assertsUnderstandingUtterance } from './understandingSignals';
 import { asksWhoToContact, asksRiskExplanation, normalizeUserText } from './normalizeUserText';
+import { detectClinicianSpecialty } from './clinicianSpecialty';
 import type { PendingConversationItem } from './types';
 
 export type SemanticTopic =
@@ -282,6 +286,10 @@ export interface SemanticFeatures {
   asksCertainty: boolean;
   asksLimitation: boolean;
   asksInputs: boolean;
+  /** Population/educational ask about how a factor (e.g. biopsy) relates to risk. */
+  asksRiskFactorEffect: boolean;
+  /** Ask about Gail model / calculator purpose or how the tool works. */
+  asksCalculatorPurpose: boolean;
   asksTimeHorizonCompare: boolean;
   asksRiskMeaning: boolean;
   asksRiskLevel: boolean;
@@ -295,7 +303,11 @@ export interface SemanticFeatures {
   asksScreeningGuidance: boolean;
   asksCalculatorResultSource: boolean;
   asksNextStep: boolean;
+  /** User wants to review/discuss the estimate without a more specific ask. */
+  reviewsEstimate: boolean;
   asksDraftHelp: boolean;
+  asksPhoneFollowUp: boolean;
+  namesClinicianSpecialty: string | null;
   asksDraftRevision: boolean;
   acceptsDraft: boolean;
   rejectsDraft: boolean;
@@ -316,6 +328,21 @@ export interface SemanticFeatures {
   asksPreparationInfo: boolean;
   /** Category: wants sample questions to ask a clinician (not a message draft). */
   asksClinicianQuestions: boolean;
+}
+
+/** True when the user asks the avatar for post-diagnosis changes / care advice. */
+export function asksPostDiagnosisOrTreatmentCare(text: string): boolean {
+  // Match raw and dictionary-normalized forms ("diagnosed"→"diagnose", "after"→"later").
+  const message = text.toLowerCase();
+  return (
+    /\b(if|when|after|once|later)\b.{0,50}\b(i (am |get |were |have been )?(diagnosed|diagnose)|(diagnosed|diagnose) with|a diagnosis|cancer diagnosis)\b/.test(
+      message,
+    ) ||
+    (/\b(diagnosed|diagnose)\b/.test(message) &&
+      /\b(what (specific )?(changes|steps)|what can i (try|do|change)|how (should|do|can) i|treatment|manage|care plan)\b/.test(
+        message,
+      ))
+  );
 }
 
 export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
@@ -417,7 +444,27 @@ export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
     asksInputs:
       /\b(what information|what (inputs?|factors?)|calculator use|input (factors?|information))\b/.test(
         message,
+      ) ||
+      /\b(how (it|they|this|the (number|result|estimate|score)s?) (was|were|is|are) (calculat|computed|produced|derived|made)|how .{0,20}(calculat|computed|produced)|numbers? themselves)\b/.test(
+        message,
       ),
+    asksRiskFactorEffect:
+      (/\bbiops(y|ies)\b/.test(message) &&
+        /\b(risk|chance|affect|influence|breast cancer|estimate|probability)\b/.test(message)) ||
+      (/\b(chance|risk) of .{0,48}(breast )?cancer\b/.test(message) &&
+        /\b(biopsy|biopsies|family history|atypical hyperplasia|menstruat|first live birth)\b/.test(
+          message,
+        )) ||
+      (/\bhow (a |an |the )?(recent )?biopsy\b/.test(message) &&
+        /\b(risk|chance|affect|influence)\b/.test(message)),
+    asksCalculatorPurpose:
+      /\b(gail model|gail models|bcrat|breast cancer risk assessment tool)\b/.test(message) ||
+      (/\b(purpose|what (is|does)|how (it|they|this|the (model|tool|calculator)) works?)\b/.test(
+        message,
+      ) &&
+        /\b(gail|calculator|model|assessment tool|risk tool)\b/.test(message)) ||
+      (/\b(learn|tell me|explain).{0,40}\b(gail|calculator|model)\b/.test(message) &&
+        /\b(purpose|how|about|works?)\b/.test(message)),
     asksTimeHorizonCompare:
       /\b(difference|compare|versus|vs\.?|between).{0,40}(five[- ]?year|5[- ]?year|lifetime)\b/.test(
         message,
@@ -486,13 +533,32 @@ export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
         message,
       ),
     asksNextStep:
-      /\b(what (should|can|do) i do next|what i should do next|what to do next|do not know what to do next|next step)\b/.test(
+      /\b(what (should|can|do) i do next|what i should do next|what to do next|do not know what to do next|next steps?)\b/.test(
         message,
-      ),
+      ) ||
+      /\b(mean|means|meaning).{0,48}next steps?\b/.test(message) ||
+      /\bwhat (they|it|this|the (number|result|estimate)s?) mean for .{0,40}next steps?\b/.test(message) ||
+      /\b(for )?(my |your )?next steps?\b/.test(message),
+    reviewsEstimate:
+      /\b(review(ing)?|look(ing)? (at|over)|go(ing)? over|help (me )?with).{0,24}(my |the |this )?(estimate|result|number|score|risk)\b/.test(
+        message,
+      ) ||
+      /^(my |the |this )?(estimate|result|risk estimate)\b/.test(message),
     asksDraftHelp:
       /\b(do not|don't|dont) know what to write\b/.test(message) ||
       /\bhelp (me )?(draft|write)\b/.test(message) ||
-      (/\bportal\b/.test(message) && /\b(write|draft|message)\b/.test(message)),
+      (/\bportal\b/.test(message) &&
+        /\b(write|draft|message|script|send)\b/.test(message)) ||
+      /\b(looking to use a script|use (a )?script|call script|phone script|what to say)\b/.test(
+        message,
+      ) ||
+      /\b(give|send|need|want).{0,40}\bscript\b/.test(message) ||
+      /\bshort script\b/.test(message) ||
+      (/\bscript\b/.test(message) && /\b(call|phone|office|use|looking|portal)\b/.test(message)),
+    asksPhoneFollowUp:
+      /\bcall(ing)? (the )?(clinic|doctor|office)\b/.test(message) ||
+      /\b(prefer|want|choose|try).{0,20}(a )?phone call\b/.test(message),
+    namesClinicianSpecialty: detectClinicianSpecialty(rawMessage) ?? detectClinicianSpecialty(message),
     asksDraftRevision:
       /\b(make it shorter|shorter|less formal|not too formal|remove the|revise|reword|edit)\b/.test(
         message,
@@ -535,15 +601,18 @@ export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
         /\b(diagnos\w*|tests?).{0,50}\b(with|for|ask).{0,20}\b(doctor|clinician|physician|provider)\b/.test(
           message,
         );
-      if (clinicianDirectedDiagnosisTalk) return false;
+      // Post-diagnosis "what changes can I try" asks the avatar for care advice —
+      // even when the sentence also mentions meeting a clinician.
+      const postDiagnosisCareAsk = asksPostDiagnosisOrTreatmentCare(message);
+      if (clinicianDirectedDiagnosisTalk && !postDiagnosisCareAsk) return false;
       const treatmentOrCareRequest =
         /\b(prescribe|medication|treatment plan|what treatment|chemotherapy|radiation|treat(ment|ing) (for )?(breast )?cancer)\b/.test(
           message,
-        );
+        ) || postDiagnosisCareAsk;
       return (
         treatmentOrCareRequest ||
-        /\b(do i have cancer|am i diagnosed)\b/.test(message) ||
-        (/\b(diagnose|diagnosis)\b/.test(message) &&
+        /\b(do i have cancer|am i diagnos(?:ed|e)?)\b/.test(message) ||
+        (/\b(diagnose|diagnosis|diagnosed)\b/.test(message) &&
           !/\bnot a diagnosis\b/.test(message) &&
           !/\b(eventual diagnosis|know .{0,20}diagnosis)\b/.test(message) &&
           !/\b(elevated|high).{0,40}(mean|means|diagnos)\b/.test(message) &&
@@ -565,9 +634,14 @@ export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
         return true;
       }
       const lifestyleCue =
-        /\b(exercise|physical activity|workout|fitness|life[- ]?style|diet|nutrition|healthy (habits|living)|wellness|prevention|modifiable|lower (my )?risk|stay healthy|be healthy|take care of (my )?health|initial care|self[- ]?care|what can i do|motivational guide|stay active|keep active|maintain .{0,40}(activity|exercise|fitness))\b/.test(
+        /\b(exercise|physical activity|workout|fitness|yoga|life[- ]?style|diet|nutrition|healthy (habits|living)|wellness|prevention|modifiable|lower (my )?risk|daily routine|fit(ting)? (it |them |activity |exercise )?(in|into).{0,24}(routine|day|schedule)|stay healthy|be healthy|take care of (my )?health|initial care|self[- ]?care|what can i do|motivational guide|stay active|keep active|stay motivated|keep motivated|maintain .{0,40}(activity|exercise|fitness))\b/.test(
           message,
-        );
+        ) ||
+        /\breduce\b.{0,40}\brisk\b/.test(message) ||
+        /\b(tips?|advice).{0,40}\b(yoga|exercise|workout|routine|habit|activity|fitness|motivat)\b/.test(
+          message,
+        ) ||
+        /\b(set(ting)? up|build(ing)?|start(ing)?).{0,24}\b(a )?routine\b/.test(message);
       if (!lifestyleCue) return false;
       // Medication/treatment protocols stay on the safety path.
       if (/\b(medication|chemotherapy|radiation|treatment plan|prescribe)\b/.test(message)) {
@@ -576,12 +650,13 @@ export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
       return (
         /\?/.test(rawMessage) ||
         /^(should|can|what|how|does|is|would|will|provide|i want|i need)\b/.test(message) ||
-        /\b(focus|help|affect|relate|matter|important|reduce|lower|information|motivate|maintain|guide)\b/.test(
+        /\b(focus|help|affect|relate|matter|important|reduce|lower|information|motivate|maintain|guide|routine|fit)\b/.test(
           message,
         ) ||
-        /\b(exercise|physical activity|life[- ]?style|diet|fitness).{0,40}(risk|health|cancer)\b/.test(
+        /\b(exercise|physical activity|life[- ]?style|diet|fitness|daily routine).{0,40}(risk|health|cancer)\b/.test(
           message,
         ) ||
+        /\b(reduce|lower).{0,40}\b(breast cancer )?risk\b/.test(message) ||
         /\b(initial care|self[- ]?care|take care).{0,40}(breast cancer|health|risk)\b/.test(message) ||
         /\b(motivational guide|maintain .{0,40}(activity|exercise)|keep .{0,20}(active|activity))\b/.test(
           message,
@@ -631,7 +706,9 @@ export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
       return prepIntent;
     })(),
     asksClinicianQuestions:
-      // Want/need questions to ask a doctor/clinician — not "help me draft a message".
+      // Want/need questions to ask a doctor/clinician — not "help me draft a message"
+      // and not wrap-ups like "thanks, I'll bring these questions to my visit".
+      !featuresClosingHint(message) &&
       !/\b(draft|portal message|write (a |the )?message|wording)\b/.test(message) &&
       ((/\b(questions?|what to ask|tips)\b/.test(message) &&
         /\b(ask|doctor|clinician|physician|provider|healthcare professional|call|appointment|visit)\b/.test(
@@ -641,6 +718,11 @@ export function detectSemanticFeatures(rawMessage: string): SemanticFeatures {
         /\bquestions?\s+(i (need|should|can|could)|to) ask\b/.test(message) ||
         /\b(question|questions) i need to ask\b/.test(message)),
   };
+}
+
+/** Closing / gratitude wrap-ups must not be reclassified as clinician-question asks. */
+function featuresClosingHint(message: string): boolean {
+  return isClosingUtterance(message) || isGratitudeUtterance(message);
 }
 
 type BuildTurnPartial = {
@@ -799,22 +881,29 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
   if (
     features.safetyTrigger &&
     !features.elevatedMeansDiagnosis &&
-    !features.asksClinicianQuestions &&
-    !features.asksPreparationInfo &&
-    !features.asksLifestyleFocus
+    // Post-diagnosis care asks stay on the safety path even if the wording
+    // also mentions a clinician visit or preparation keywords.
+    (asksPostDiagnosisOrTreatmentCare(message) ||
+      (!features.asksClinicianQuestions &&
+        !features.asksPreparationInfo &&
+        !features.asksLifestyleFocus))
   ) {
     return buildTurn({
       topic: 'safety',
       primaryOperation: 'set_boundary',
       stance: 'asking',
-      explicitRequest: 'Set a safety boundary for diagnosis or treatment requests.',
+      explicitRequest: asksPostDiagnosisOrTreatmentCare(message)
+        ? 'Set a safety boundary for post-diagnosis care or treatment requests; offer educational alternatives this guide can support.'
+        : 'Set a safety boundary for diagnosis or treatment requests.',
       propositions: [{ text: raw, status: 'question' }],
       entities: baseEntities,
-      userConstraints: [],
+      userConstraints: asksPostDiagnosisOrTreatmentCare(message)
+        ? ['post-diagnosis care boundary']
+        : [],
       understanding: 'not_assessable',
       emotion: 'not_expressed',
       barrier: 'not_expressed',
-      requiresMedicalEvidence: false,
+      requiresMedicalEvidence: true,
       requiresCalculatorMetadata: false,
       requiresDeterministicCalculation: false,
       requiresSafetyBoundary: true,
@@ -847,6 +936,31 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
     });
   }
 
+  // Thanks / farewell / visit wrap-ups before clinician-question detection.
+  if (features.closing || isGratitudeUtterance(raw) || isGratitudeUtterance(message)) {
+    return buildTurn({
+      topic: 'closing',
+      primaryOperation: 'close',
+      stance: 'completed',
+      explicitRequest: isGratitudeUtterance(raw) || isGratitudeUtterance(message)
+        ? 'Acknowledge the user thanks briefly and close supportively without restarting the menu.'
+        : 'Close the conversation supportively.',
+      propositions: [{ text: raw, status: 'preference' }],
+      entities: baseEntities,
+      userConstraints: isGratitudeUtterance(raw) || isGratitudeUtterance(message) ? ['gratitude'] : [],
+      understanding: 'not_assessable',
+      emotion: 'not_expressed',
+      barrier: 'not_expressed',
+      requiresMedicalEvidence: false,
+      requiresCalculatorMetadata: false,
+      requiresDeterministicCalculation: false,
+      requiresSafetyBoundary: false,
+      requiresClarification: false,
+      directAnswerRequired: true,
+      confidence: 0.95,
+    });
+  }
+
   // Sample questions for a clinician — must not become a portal/message draft.
   if (features.asksClinicianQuestions) {
     const detailed = features.wantsDetailed;
@@ -876,6 +990,71 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
       requiresClarification: false,
       confidence: 0.92,
       directAnswerRequired: true,
+    });
+  }
+
+  // User named a clinician specialty — deliver prep immediately; do not ask subtype/focus.
+  if (features.namesClinicianSpecialty) {
+    const specialty = features.namesClinicianSpecialty;
+    return buildTurn({
+      topic: 'professional_interpretation',
+      primaryOperation: 'list_information',
+      secondaryOperations: ['provide_preparation_information', 'set_personalized_advice_boundary'],
+      stance: 'accepting',
+      explicitRequest: `The user selected a ${specialty}. Immediately provide general preparation help and sample questions for discussing a demonstration risk estimate with that clinician type. Do not ask which subtype they meant or what topic to focus on.`,
+      requestedFormat: 'short list',
+      propositions: [{ text: raw, status: 'preference' }],
+      entities: { ...baseEntities, selectedOption: specialty },
+      userConstraints: [
+        'questions for clinician',
+        'not a message draft',
+        `selected clinician: ${specialty}`,
+        'no clarifying question',
+      ],
+      understanding: 'not_assessable',
+      emotion: 'not_expressed',
+      barrier: 'not_expressed',
+      requiresMedicalEvidence: false,
+      requiresCalculatorMetadata: false,
+      requiresDeterministicCalculation: false,
+      requiresSafetyBoundary: false,
+      requiresClarification: false,
+      requiresConversationContext: true,
+      directAnswerRequired: true,
+      confidence: 0.93,
+    });
+  }
+
+  // User named a schedule slot after a lifestyle timing ask — lock in, do not re-clarify.
+  if (
+    isLifestyleScheduleChoiceTurn(raw, input.previousAssistantReply) ||
+    isLifestyleScheduleChoiceTurn(message, input.previousAssistantReply)
+  ) {
+    const slot = extractChosenScheduleLabel(raw);
+    const activity =
+      extractActivityFromAssistantReply(input.previousAssistantReply) ?? 'movement';
+    return buildTurn({
+      topic: 'lifestyle_risk_information',
+      primaryOperation: 'answer_general_health_question',
+      secondaryOperations: [
+        'explain_lifestyle_relationship',
+        'set_personalized_advice_boundary',
+      ],
+      stance: 'accepting',
+      explicitRequest: `Lock in the user's chosen activity schedule (${slot} for ${activity}). Affirm this as a realistic step, briefly reinforce population-level physical-activity benefits, and do not ask another which-part or when-during timing clarifying question.`,
+      propositions: [{ text: raw, status: 'preference' }],
+      entities: baseEntities,
+      userConstraints: [`chosen schedule: ${slot}`, `chosen activity: ${activity}`],
+      understanding: 'not_assessable',
+      emotion: 'not_expressed',
+      barrier: 'not_expressed',
+      requiresMedicalEvidence: true,
+      requiresCalculatorMetadata: false,
+      requiresDeterministicCalculation: false,
+      requiresSafetyBoundary: false,
+      requiresClarification: false,
+      directAnswerRequired: true,
+      confidence: 0.93,
     });
   }
 
@@ -959,30 +1138,6 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
       requiresClarification: false,
       directAnswerRequired: true,
       confidence: 0.9,
-    });
-  }
-
-  if (features.closing || isGratitudeUtterance(raw) || isGratitudeUtterance(message)) {
-    return buildTurn({
-      topic: 'closing',
-      primaryOperation: 'close',
-      stance: 'completed',
-      explicitRequest: isGratitudeUtterance(raw) || isGratitudeUtterance(message)
-        ? 'Acknowledge the user thanks briefly and close supportively without restarting the menu.'
-        : 'Close the conversation supportively.',
-      propositions: [{ text: raw, status: 'preference' }],
-      entities: baseEntities,
-      userConstraints: isGratitudeUtterance(raw) || isGratitudeUtterance(message) ? ['gratitude'] : [],
-      understanding: 'not_assessable',
-      emotion: 'not_expressed',
-      barrier: 'not_expressed',
-      requiresMedicalEvidence: false,
-      requiresCalculatorMetadata: false,
-      requiresDeterministicCalculation: false,
-      requiresSafetyBoundary: false,
-      requiresClarification: false,
-      directAnswerRequired: true,
-      confidence: 0.95,
     });
   }
 
@@ -1416,19 +1571,66 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
     });
   }
 
-  if (features.asksInputs) {
+  if (features.asksCalculatorPurpose) {
+    const howWorks =
+      /\bhow (it|they|the (gail )?model|the (tool|calculator)) works?\b/.test(message) ||
+      /\bhow it estimates\b/.test(message);
+    return buildTurn({
+      topic: 'calculator_applicability',
+      primaryOperation: 'answer_factual_question',
+      secondaryOperations: ['set_personalized_advice_boundary'],
+      stance: 'asking',
+      explicitRequest: howWorks
+        ? 'Explain educationally how the Gail model / breast-cancer risk assessment tool estimates population-level risk from selected inputs. Do not ask another clarifying question.'
+        : 'Explain the purpose of the Gail model / breast-cancer risk assessment tool: estimating the probability of developing invasive breast cancer over specified periods. Do not ask another clarifying question.',
+      propositions: [{ text: raw, status: 'question' }],
+      entities: { ...baseEntities, referencedObject: 'Gail model / BCRAT' },
+      userConstraints: howWorks
+        ? ['calculator how it works', 'no clarifying loop']
+        : ['calculator purpose', 'no clarifying loop'],
+      understanding: 'not_assessable',
+      emotion: 'not_expressed',
+      barrier: 'not_expressed',
+      requiresMedicalEvidence: true,
+      requiresCalculatorMetadata: false,
+      requiresDeterministicCalculation: false,
+      requiresSafetyBoundary: false,
+      requiresClarification: false,
+      directAnswerRequired: true,
+      confidence: 0.93,
+    });
+  }
+
+  if (features.asksInputs || features.asksRiskFactorEffect) {
     const alsoLimits = features.asksLimitation;
+    const biopsyFocus = /\bbiops(y|ies)\b/.test(message);
+    const factorFocus = biopsyFocus
+      ? 'previous breast biopsies'
+      : /\bfamily history\b/.test(message)
+        ? 'family history'
+        : /\batypical hyperplasia\b/.test(message)
+          ? 'atypical hyperplasia'
+          : 'selected calculator inputs';
     return buildTurn({
       topic: 'calculator_inputs',
       primaryOperation: 'list_information',
-      secondaryOperations: alsoLimits ? ['identify_limitation'] : [],
+      secondaryOperations: alsoLimits
+        ? ['identify_limitation', 'set_personalized_advice_boundary']
+        : ['set_personalized_advice_boundary'],
       stance: 'asking',
-      explicitRequest: alsoLimits
-        ? 'Explain the input information used by the calculator and identify important factors it might not include.'
-        : 'Explain the input information used by the calculator.',
+      explicitRequest: features.asksRiskFactorEffect
+        ? `Answer educationally how ${factorFocus} relate to breast-cancer risk estimates at a population/calculator-input level. Do not give a personal post-biopsy risk number or clinical recommendation; explain that tools may include biopsy history among inputs, that a biopsy itself is not a diagnosis of future cancer, and that a clinician interprets individual history.`
+        : alsoLimits
+          ? 'Explain the input information used by the calculator and identify important factors it might not include.'
+          : 'Explain the input information used by the calculator.',
       propositions: [{ text: raw, status: 'question' }],
-      entities: baseEntities,
-      userConstraints: [],
+      entities: {
+        ...baseEntities,
+        referencedObject: biopsyFocus ? 'breast biopsy history' : 'calculator inputs',
+      },
+      userConstraints: features.asksRiskFactorEffect
+        ? [`risk factor focus: ${factorFocus}`, 'no personalized biopsy risk number']
+        : [],
       understanding: 'not_assessable',
       emotion: 'not_expressed',
       barrier: 'not_expressed',
@@ -1437,6 +1639,7 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
       requiresDeterministicCalculation: false,
       requiresSafetyBoundary: false,
       requiresClarification: false,
+      directAnswerRequired: true,
       confidence: 0.9,
     });
   }
@@ -1491,16 +1694,33 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
     const constraints: string[] = ['editable draft'];
     if (/\bshort\b/.test(message)) constraints.push('short length');
     if (features.wantsInformal) constraints.push('less formal tone');
+    const wantsPortalDraft =
+      /\bportal\b/.test(message) ||
+      /\b(patient portal|portal message|send .{0,20}(portal|message)|through the .{0,20}portal)\b/.test(
+        message,
+      );
+    const wantsPhoneScript =
+      !wantsPortalDraft &&
+      (features.asksPhoneFollowUp ||
+        /\b(phone script|call script)\b/.test(message) ||
+        (/\bscript\b/.test(message) && /\b(call|phone|office)\b/.test(message)) ||
+        (/\b(call|phone)\b/.test(message) && !/\b(message|email|writ)/.test(message)));
     return buildTurn({
       topic: 'message_drafting',
       primaryOperation: 'draft',
       secondaryOperations: uniqueOps(secondary),
       stance: 'asking',
-      explicitRequest:
-        'Create a short editable portal-message draft the user can adapt.',
+      explicitRequest: wantsPhoneScript
+        ? 'Create a short editable phone-call script the user can adapt when contacting the office.'
+        : 'Create a short editable portal-message draft the user can adapt.',
       propositions: [{ text: raw, status: 'preference' }],
-      entities: { ...baseEntities, selectedOption: 'written clinic message' },
-      userConstraints: constraints,
+      entities: {
+        ...baseEntities,
+        selectedOption: wantsPhoneScript ? 'phone call' : 'written clinic message',
+      },
+      userConstraints: wantsPhoneScript
+        ? constraints
+        : [...constraints, ...(wantsPortalDraft ? ['patient portal'] : [])],
       understanding: 'not_assessable',
       emotion: 'not_expressed',
       barrier: 'not_expressed',
@@ -1510,6 +1730,33 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
       requiresSafetyBoundary: false,
       requiresClarification: false,
       requiresConversationContext: true,
+      directAnswerRequired: true,
+      confidence: 0.9,
+    });
+  }
+
+  // User chose calling the office/clinic — deliver a call script, do not re-ask preference.
+  if (features.asksPhoneFollowUp && !features.asksDraftRevision && !draftPending) {
+    return buildTurn({
+      topic: 'message_drafting',
+      primaryOperation: 'draft',
+      secondaryOperations: [],
+      stance: 'asking',
+      explicitRequest:
+        'Create a short editable phone-call script for discussing a demonstration risk estimate with the office.',
+      propositions: [{ text: raw, status: 'preference' }],
+      entities: { ...baseEntities, selectedOption: 'phone call' },
+      userConstraints: ['editable draft', 'phone call'],
+      understanding: 'not_assessable',
+      emotion: 'not_expressed',
+      barrier: 'not_expressed',
+      requiresMedicalEvidence: false,
+      requiresCalculatorMetadata: false,
+      requiresDeterministicCalculation: false,
+      requiresSafetyBoundary: false,
+      requiresClarification: false,
+      requiresConversationContext: true,
+      directAnswerRequired: true,
       confidence: 0.9,
     });
   }
@@ -1712,6 +1959,28 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
     });
   }
 
+  if (features.reviewsEstimate) {
+    return buildTurn({
+      topic: 'risk_meaning',
+      primaryOperation: 'explain',
+      stance: 'asking',
+      explicitRequest: `Explain what the ${fiveYear}% ${horizon} demonstration risk estimate means in probabilistic terms, then offer one brief next-step option if helpful.`,
+      propositions: [{ text: raw, status: 'preference' }],
+      entities: { ...baseEntities, riskValue: fiveYear, timeHorizon: horizon },
+      userConstraints: [],
+      understanding: 'not_assessable',
+      emotion: 'not_expressed',
+      barrier: 'not_expressed',
+      requiresMedicalEvidence: true,
+      requiresCalculatorMetadata: false,
+      requiresDeterministicCalculation: false,
+      requiresSafetyBoundary: false,
+      requiresClarification: false,
+      directAnswerRequired: true,
+      confidence: 0.86,
+    });
+  }
+
   if (features.asksSimpleLanguage) {
     return buildTurn({
       topic: 'risk_meaning',
@@ -1797,6 +2066,38 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
     });
   }
 
+  // Clear enough educational asks should be answered, not stuck in clarify loops.
+  if (isSubstantiveEducationalAsk(message, features)) {
+    const aboutEstimate =
+      /\b(risk estimate|demonstration (risk|estimate)|percentage|probability|what (does|do) (this|the|my) (number|result|estimate|risk))\b/.test(
+        message,
+      ) ||
+      (/\b(mean|means|meaning)\b/.test(message) &&
+        /\b(risk|estimate|number|percent|result|score)\b/.test(message));
+    return buildTurn({
+      topic: aboutEstimate ? 'risk_meaning' : 'professional_interpretation',
+      primaryOperation: aboutEstimate ? 'explain' : 'answer_factual_question',
+      secondaryOperations: ['set_personalized_advice_boundary'],
+      stance: 'asking',
+      explicitRequest: aboutEstimate
+        ? `Answer the user's question about the demonstration risk estimate in plain educational terms. Do not ask another clarifying question.`
+        : `Answer the user's educational question directly with population-level information and a personalized-advice boundary. Do not ask another clarifying question; if evidence is insufficient, say so and suggest clinician interpretation.`,
+      propositions: [{ text: raw, status: 'question' }],
+      entities: baseEntities,
+      userConstraints: ['direct educational answer', 'no clarifying loop'],
+      understanding: 'not_assessable',
+      emotion: 'not_expressed',
+      barrier: 'not_expressed',
+      requiresMedicalEvidence: true,
+      requiresCalculatorMetadata: false,
+      requiresDeterministicCalculation: false,
+      requiresSafetyBoundary: false,
+      requiresClarification: false,
+      directAnswerRequired: true,
+      confidence: 0.78,
+    });
+  }
+
   return buildTurn({
     topic: 'unclear',
     primaryOperation: 'request_clarification',
@@ -1816,6 +2117,43 @@ export function interpretSemanticTurnLocal(input: InterpretSemanticTurnInput): S
     directAnswerRequired: false,
     confidence: 0.4,
   });
+}
+
+/** True when the user already asked a clear educational question worth answering. */
+function isSubstantiveEducationalAsk(
+  message: string,
+  features: {
+    asksQuestion: boolean;
+    greeting: boolean;
+    closing: boolean;
+    safetyTrigger: boolean;
+    asksDraftHelp: boolean;
+    asksPhoneFollowUp: boolean;
+  },
+): boolean {
+  if (
+    features.greeting ||
+    features.closing ||
+    features.safetyTrigger ||
+    features.asksDraftHelp ||
+    features.asksPhoneFollowUp
+  ) {
+    return false;
+  }
+  const wondering =
+    /\b(i am|i'm|im) wondering\b/.test(message) ||
+    /\b(want to (know|learn)|curious (about|how|why|what)|tell me|explain|learn (about|the))\b/.test(
+      message,
+    );
+  if (!features.asksQuestion && !wondering) return false;
+  if (/^(can|could) you (help|explain)( me)?\??$/.test(message)) return false;
+  const words = message.split(/\s+/).filter(Boolean);
+  if (words.length < 6 && message.length < 40) return false;
+  return (
+    /\b(risk|chance|estimate|percent|cancer|biopsy|screening|mammogram|family history|calculator|probability|diagnosis|lifetime|five.?year|doctor|clinician|next step|lifestyle|exercise|activity|gail|purpose|model|bcrat)\b/.test(
+      message,
+    ) || words.length >= 8
+  );
 }
 
 export function shouldSkipMedicalRagForSemantic(turn: SemanticTurn): boolean {

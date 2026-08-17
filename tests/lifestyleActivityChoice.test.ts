@@ -67,4 +67,70 @@ describe('lifestyle activity choice follow-up', () => {
     expect(result.response).not.toMatch(/what action feels realistic for you/i);
     expect(result.response.toLowerCase()).toMatch(/consistent|keep|maintain/);
   });
+
+  it('routes yoga/routine motivation tips to lifestyle under local fallback (no Groq)', async () => {
+    for (const message of [
+      'Yes Please give me tips for setting up routine',
+      'I want tips to stay motivated to do yoga',
+    ]) {
+      const semantic = interpretSemanticTurnLocal({ latestMessage: message, riskResult: risk });
+      expect(semantic.topic).toBe('lifestyle_risk_information');
+
+      const result = await orchestrateDialogueTurn(envNoGroq, {
+        latestMessage: message,
+        recentConversation: [],
+        riskResult: risk,
+      });
+      expect(result.dialogueRoute?.topic).toBe('lifestyle_risk_information');
+      expect(result.response.toLowerCase()).toMatch(
+        /physical activity|motivat|yoga|routine|healthy habit|activity|exercise/,
+      );
+      expect(result.response).not.toMatch(/which part of the result/i);
+      expect(result.response).not.toMatch(/how do you currently feel about discussing this result/i);
+    }
+  });
+
+  it('locks in morning / before-work schedule instead of nesting another which-part ask', async () => {
+    const priorScheduleAsk =
+      'Which part of your workday do you think would be most doable for a short yoga or movement break?';
+    const nestedMorningAsk =
+      'Which part of your morning routine would you like to try adding a short yoga session to?';
+
+    const morning = interpretSemanticTurnLocal({
+      latestMessage: 'I think morning session',
+      riskResult: risk,
+      previousAssistantReply: priorScheduleAsk,
+    });
+    expect(morning.topic).toBe('lifestyle_risk_information');
+    expect(morning.explicitRequest).toMatch(/lock in|schedule/i);
+    expect(morning.requiresClarification).toBe(false);
+
+    const memory = createDefaultConversationMemory();
+    memory.lastRouteTopic = 'lifestyle_risk_information';
+
+    const afterMorning = await orchestrateDialogueTurn(envNoGroq, {
+      latestMessage: 'I think morning session',
+      recentConversation: [
+        { role: 'user', content: 'I am looking for way to balance work and exercise' },
+        { role: 'assistant', content: priorScheduleAsk },
+      ],
+      riskResult: risk,
+      previousConversationMemory: memory,
+    });
+    expect(afterMorning.response.toLowerCase()).toMatch(/morning|yoga|movement/);
+    expect(afterMorning.response).not.toMatch(/which part of your morning/i);
+
+    const afterBeforeWork = await orchestrateDialogueTurn(envNoGroq, {
+      latestMessage: 'before work rutine',
+      recentConversation: [
+        { role: 'user', content: 'I think morning session' },
+        { role: 'assistant', content: nestedMorningAsk },
+      ],
+      riskResult: risk,
+      previousConversationMemory: memory,
+    });
+    expect(afterBeforeWork.response.toLowerCase()).toMatch(/before work|morning|yoga|movement/);
+    expect(afterBeforeWork.response).not.toMatch(/which part of/i);
+    expect(afterBeforeWork.response.toLowerCase()).toMatch(/protect|fit|consistent|slot|week/);
+  });
 });

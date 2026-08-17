@@ -25,9 +25,33 @@ import { buildOrchestrationSummary } from './orchestration/buildOrchestrationSum
 import { assertLatestMessagePresent, createTurnRequest } from './request/turnRequest';
 import { computeEducationalRisk, isCalculatorInputs } from './risk/simplifiedGail';
 import type { Env } from './types';
+import { getLiveAvatarPublicConfig } from './liveavatar/config';
+import {
+  endLiveAvatarSession,
+  keepAliveLiveAvatarSession,
+  startLiveAvatarSession,
+} from './liveavatar/session';
+import { deliverSpeech } from './liveavatar/deliverSpeech';
+import { createSpeech } from './tts/createSpeech';
+import { pcmToBase64 } from './tts/audioConvert';
+import { selectEmbodimentPolicy, embodimentPolicyLabel } from './embodiment/selectEmbodimentPolicy';
+import {
+  clampLiveAvatarVoiceSpeed,
+  LIVEAVATAR_VOICE_SPEED_DEFAULT,
+  parseSpeakingPace,
+  speakingPaceToVoiceSpeed,
+} from './embodiment/voiceSpeed';
+import {
+  avatarExpressionToVoiceAffect,
+  clampVoiceStability,
+  clampVoiceStyle,
+} from './embodiment/voiceAffect';
+import { embodimentToLiveAvatarVoice } from './embodiment/liveAvatarVoice';
+import type { AvatarExpression } from './embodiment/types';
+import { LIVEAVATAR_LITE_CAPABILITIES } from './liveavatar/types';
 
 export type { Env };
-export const WORKER_VERSION = '0.7.0';
+export const WORKER_VERSION = '0.8.0';
 
 // Used only when a chat request omits (or sends an invalid) risk result.
 const DEFAULT_CHAT_RISK_RESULT = getMockRiskResult('average');
@@ -57,11 +81,230 @@ function handleHealth(): Response {
 function handleConfigStatus(env: Env): Response {
   const groqConfigured = Boolean(env.GROQ_API_KEY);
   const groqModel = env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
+  const liveAvatar = getLiveAvatarPublicConfig(env);
   return json({
     backendConnected: true,
     groqConfigured,
     groqModel,
     dynamicModeAvailable: groqConfigured,
+    liveAvatar,
+  });
+}
+
+function handleLiveAvatarConfig(env: Env): Response {
+  return json(getLiveAvatarPublicConfig(env));
+}
+
+async function handleLiveAvatarSessionStart(env: Env, request: Request): Promise<Response> {
+  const publicConfig = getLiveAvatarPublicConfig(env);
+  if (!publicConfig.enabled) {
+    return json({ error: 'LiveAvatar is disabled', code: 'disabled' }, 400);
+  }
+  if (!publicConfig.configured) {
+    return json(
+      {
+        error: 'Avatar unavailable. Text mode remains available.',
+        code: 'not_configured',
+        reason: publicConfig.missingReason ?? 'not_configured',
+      },
+      400,
+    );
+  }
+
+  const body = (await readJsonBody(request)) as {
+    voiceSpeed?: unknown;
+    speakingPace?: unknown;
+    voiceStyle?: unknown;
+    voiceStability?: unknown;
+    avatarExpression?: unknown;
+  } | null;
+
+  let voiceSpeed = LIVEAVATAR_VOICE_SPEED_DEFAULT;
+  if (typeof body?.voiceSpeed === 'number') {
+    voiceSpeed = clampLiveAvatarVoiceSpeed(body.voiceSpeed);
+  } else {
+    const pace = parseSpeakingPace(body?.speakingPace);
+    if (pace) voiceSpeed = speakingPaceToVoiceSpeed(pace);
+  }
+
+  const expression =
+    typeof body?.avatarExpression === 'string' ? (body.avatarExpression as AvatarExpression) : undefined;
+  const fromExpression = expression ? avatarExpressionToVoiceAffect(expression) : undefined;
+  const voiceAffect = {
+    style: clampVoiceStyle(
+      typeof body?.voiceStyle === 'number' ? body.voiceStyle : (fromExpression?.style ?? 0.15),
+    ),
+    stability: clampVoiceStability(
+      typeof body?.voiceStability === 'number'
+        ? body.voiceStability
+        : (fromExpression?.stability ?? 0.75),
+    ),
+  };
+
+  const result = await startLiveAvatarSession(env, fetch, {
+    voiceSpeed,
+    voiceAffect,
+    avatarExpression: expression,
+  });
+  if (!result.ok) {
+    const status = result.code === 'authentication' ? 401 : 502;
+    return json({ error: result.error, code: result.code }, status);
+  }
+  // Return short-lived client credentials only — never LIVEAVATAR_API_KEY.
+  return json({
+    session: result.session,
+    mode: publicConfig.sandbox ? 'Sandbox' : 'Production',
+  });
+}
+
+async function handleLiveAvatarSessionEnd(request: Request): Promise<Response> {
+  const body = (await readJsonBody(request)) as { sessionToken?: unknown } | null;
+  const sessionToken = typeof body?.sessionToken === 'string' ? body.sessionToken : '';
+  const result = await endLiveAvatarSession(sessionToken);
+  if (!result.ok) {
+    return json({ error: result.error, code: result.code }, 400);
+  }
+  return json({ ok: true });
+}
+
+async function handleLiveAvatarKeepAlive(request: Request): Promise<Response> {
+  const body = (await readJsonBody(request)) as { sessionToken?: unknown } | null;
+  const sessionToken = typeof body?.sessionToken === 'string' ? body.sessionToken : '';
+  const result = await keepAliveLiveAvatarSession(sessionToken);
+  if (!result.ok) {
+    return json({ error: result.error, code: result.code }, 400);
+  }
+  return json({ ok: true });
+}
+
+async function handleLiveAvatarPrepareSpeech(request: Request, env: Env): Promise<Response> {
+  const body = (await readJsonBody(request)) as {
+    assistantTurnId?: unknown;
+    validatedText?: unknown;
+    adaptiveState?: unknown;
+    currentTurnEvidence?: unknown;
+    connected?: unknown;
+    sessionId?: unknown;
+  } | null;
+
+  const assistantTurnId =
+    typeof body?.assistantTurnId === 'string' ? body.assistantTurnId.trim() : '';
+  const validatedText =
+    typeof body?.validatedText === 'string' ? body.validatedText.trim() : '';
+  if (!assistantTurnId || !validatedText) {
+    return json({ error: 'assistantTurnId and validatedText are required' }, 400);
+  }
+
+  const adaptiveState = normalizeAdaptiveState(
+    body?.adaptiveState && typeof body.adaptiveState === 'object'
+      ? (body.adaptiveState as Parameters<typeof normalizeAdaptiveState>[0])
+      : null,
+  );
+  const evidence =
+    body?.currentTurnEvidence && typeof body.currentTurnEvidence === 'object'
+      ? (body.currentTurnEvidence as {
+          emotion?: string;
+          understanding?: string;
+          selfEfficacy?: string;
+        })
+      : undefined;
+  const embodiment = selectEmbodimentPolicy({
+    adaptiveState,
+    currentTurnEvidence: evidence,
+    capabilities: LIVEAVATAR_LITE_CAPABILITIES,
+  });
+  const voice = embodimentToLiveAvatarVoice({
+    avatarExpression: embodiment.avatarExpression,
+    speakingPace: embodiment.speakingPace,
+  });
+  const voiceSpeed = voice.speed;
+  const voiceAffect = { style: voice.style, stability: voice.stability };
+
+  const publicConfig = getLiveAvatarPublicConfig(env);
+  const connected = Boolean(body?.connected);
+  const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : undefined;
+
+  // FULL mode: LiveAvatar built-in TTS speaks host text via avatar.speak_text.
+  // Voice speed / affect are applied at session-token creation (not mid-speak).
+  if (publicConfig.mode === 'FULL') {
+    return json({
+      delivery: {
+        assistantTurnId,
+        requested: connected,
+        speechGenerated: connected,
+        speechStarted: false,
+        speechCompleted: false,
+        interrupted: false,
+        sessionId,
+        ttsProvider: 'liveavatar-full',
+        audioFormat: 'liveavatar_builtin_tts',
+        ...(connected
+          ? {}
+          : {
+              failureStage: 'not_connected' as const,
+              failureMessage: 'Avatar session not connected',
+            }),
+      },
+      embodiment,
+      embodimentPolicyLabel: embodimentPolicyLabel(embodiment),
+      voiceSpeed,
+      voiceAffect,
+      mode: 'FULL' as const,
+      tts: {
+        ok: true as const,
+        provider: 'liveavatar-full',
+        delivery: 'speak_text' as const,
+        validatedText,
+        assistantTurnId,
+      },
+    });
+  }
+
+  // Dry-run LITE delivery metadata (browser streams PCM via agent.speak).
+  const delivery = await deliverSpeech({
+    env,
+    request: { assistantTurnId, validatedText },
+    connected,
+    sessionId,
+    embodiment,
+    dryRun: true,
+  });
+
+  const speech = await createSpeech(env, {
+    text: validatedText,
+    delivery: {
+      tone: embodiment.deliveryTone,
+      pace: embodiment.speakingPace,
+      speed: voiceSpeed,
+    },
+  });
+
+  return json({
+    delivery,
+    embodiment,
+    embodimentPolicyLabel: embodimentPolicyLabel(embodiment),
+    voiceSpeed,
+    voiceAffect,
+    mode: 'LITE' as const,
+    tts: speech.ok
+      ? {
+          ok: true as const,
+          provider: speech.tts.provider,
+          delivery: 'speak_audio' as const,
+          sampleRate: speech.normalized.sampleRate,
+          channels: speech.normalized.channels,
+          encoding: speech.normalized.encoding,
+          audioBase64: pcmToBase64(speech.normalized.pcm),
+          validatedText,
+          assistantTurnId,
+        }
+      : {
+          ok: false as const,
+          reason: speech.reason,
+          message: speech.message,
+          validatedText,
+          assistantTurnId,
+        },
   });
 }
 
@@ -315,6 +558,26 @@ export default {
 
     if (url.pathname === '/api/chat' && request.method === 'POST') {
       return handleChat(request, env);
+    }
+
+    if (url.pathname === '/api/liveavatar/config' && request.method === 'GET') {
+      return handleLiveAvatarConfig(env);
+    }
+
+    if (url.pathname === '/api/liveavatar/session/start' && request.method === 'POST') {
+      return handleLiveAvatarSessionStart(env, request);
+    }
+
+    if (url.pathname === '/api/liveavatar/session/end' && request.method === 'POST') {
+      return handleLiveAvatarSessionEnd(request);
+    }
+
+    if (url.pathname === '/api/liveavatar/session/keep-alive' && request.method === 'POST') {
+      return handleLiveAvatarKeepAlive(request);
+    }
+
+    if (url.pathname === '/api/liveavatar/prepare-speech' && request.method === 'POST') {
+      return handleLiveAvatarPrepareSpeech(request, env);
     }
 
     if (url.pathname.startsWith('/api/')) {

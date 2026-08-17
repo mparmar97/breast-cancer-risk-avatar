@@ -9,5 +9,21 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Non-secret LiveAvatar defaults. Secrets (GROQ_API_KEY, LIVEAVATAR_API_KEY)
+  // must be provided via `.dev.vars` locally or `wrangler secret put` in deploy.
+  "vars": {
+    "LIVEAVATAR_ENABLED": "true",
+    // false = doctor avatar (Ann) on LITE — uses credits (~1/min). Keep sessions ≤120s.
+    "LIVEAVATAR_SANDBOX": "false",
+    // LITE = 1 credit/min (Groq LLM + Groq TTS). FULL = 2 credits/min.
+    "LIVEAVATAR_MODE": "LITE",
+    // Public "Ann Doctor Sitting"
+    "LIVEAVATAR_AVATAR_ID": "fc9c1f9f-bc99-4fd9-a6b2-8b4b5669a046",
+    "LIVEAVATAR_VOICE_ID": "de5574fc-009e-4a01-a881-9919ef8f5a0c",
+    // LITE heard voice = Groq Orpheus (female). Keep explicit so demos don't drift.
+    "GROQ_TTS_VOICE": "hannah",
+    // ~2 minute meaningful interactions; Starter plan hard cap is ~5 min.
+    "LIVEAVATAR_DEV_MAX_SESSION_SECONDS": "120"
   }
 }

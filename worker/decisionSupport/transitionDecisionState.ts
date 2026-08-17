@@ -54,13 +54,21 @@ export interface TransitionDecisionStateInput {
 }
 
 function detectSelectedOption(message: string, previous: string | null): string | null {
-  if (PORTAL_PREFERENCE_PATTERN.test(message) || /\bportal message would work\b/i.test(message)) {
+  if (
+    PORTAL_PREFERENCE_PATTERN.test(message) ||
+    /\bportal message would work\b/i.test(message) ||
+    (/\bportal\b/i.test(message) && /\b(script|message|draft|send)\b/i.test(message))
+  ) {
     return 'portal message';
   }
   if (/\b(writing to the clinic|write to the clinic)\b/i.test(message)) {
     return 'portal message';
   }
-  if (/\b(call|phone).{0,20}(better|prefer|works)\b/i.test(message)) {
+  if (
+    /\b(call|phone).{0,20}(better|prefer|works)\b/i.test(message) ||
+    /\bcall(ing)? (the )?(clinic|doctor|office)\b/i.test(message) ||
+    /\bphone call\b/i.test(message)
+  ) {
     return 'phone call';
   }
   return previous;
@@ -178,11 +186,13 @@ function estimateNeed(
   }
 
   if (OPTION_CHOICE_PATTERN.test(message) || PORTAL_PREFERENCE_PATTERN.test(message)) {
+    const optionNow = detectSelectedOption(message, previous.selectedOption);
+    const hasOption = Boolean(optionNow) || PORTAL_PREFERENCE_PATTERN.test(message);
     return {
       topic: 'how_to_follow_up',
-      need: previous.selectedOption || PORTAL_PREFERENCE_PATTERN.test(message) ? 'insufficient_support' : 'unclear_preferences',
+      need: hasOption ? 'insufficient_support' : 'unclear_preferences',
       secondary: [],
-      stage: 'preference_clarification',
+      stage: hasOption ? 'preparing_action' : 'preference_clarification',
       confidence: 'moderate',
     };
   }

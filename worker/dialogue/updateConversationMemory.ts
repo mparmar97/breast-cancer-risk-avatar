@@ -17,7 +17,8 @@ const TIMING_PATTERN =
 const WRITTEN_OPTION_PATTERN =
   /\b(writ(e|ing)|portal|message).{0,40}(clinic|schedule|better|prefer|works|fit|manageable)|fits my schedule\b/i;
 
-const PHONE_OPTION_PATTERN = /\b(call|phone).{0,20}(better|prefer|works|clinic|doctor)\b/i;
+const PHONE_OPTION_PATTERN =
+  /\b(call|phone).{0,20}(better|prefer|works|clinic|doctor|office)\b|\bcall(ing)? (the )?(clinic|doctor|office)\b|\bphone call\b/i;
 
 const SEND_TONIGHT_PATTERN =
   /\bi('ll| will) send (it|this|that|the message|the draft).{0,20}(tonight|today|tomorrow|after work)?\b/i;

@@ -58,7 +58,10 @@ import type { DialogueStrategy } from '../behavioral/policy';
 import { extractRecentAssistantMessages } from '../llm/conversationContext';
 import { generateDynamicResponse } from '../llm/generateDynamicResponse';
 import { DEFAULT_GROQ_MODEL } from '../llm/groqClient';
-import { generatePlanAwareFallback } from '../llm/planAwareFallback';
+import {
+  generatePlanAwareFallback,
+  lifestyleScheduleLockInFallback,
+} from '../llm/planAwareFallback';
 import { applyRepetitionGuard } from '../llm/repetitionGuard';
 import type { FallbackReason, ResponseMode } from '../llm/types';
 import {
@@ -68,8 +71,12 @@ import {
 } from '../dialogue/activeInformationNeed';
 import { selectTheoryApplication, type TheoryApplication } from '../dialogue/theoryApplication';
 import {
+  extractActivityFromAssistantReply,
   extractChosenActivityLabel,
+  extractChosenScheduleLabel,
   isLifestyleActivityChoiceTurn,
+  isLifestyleScheduleChoiceTurn,
+  isLifestyleScheduleClarifyQuestion,
 } from '../dialogue/lifestyleActivitySignals';
 import { buildRetrievalSpec } from '../rag/buildRetrievalSpec';
 import { buildOperationAwareRetrievalQuery } from '../rag/buildRetrievalQuery';
@@ -282,7 +289,7 @@ export async function orchestrateDialogueTurn(
         requiresClarification: false,
         confidence: Math.max(requestInterpretation.semanticTurn.confidence, 0.9),
       };
-      requestInterpretation.topic = 'professional_interpretation';
+      requestInterpretation.topic = 'professional_interpretation' as typeof requestInterpretation.topic;
       requestInterpretation.operation = 'list_information';
       requestInterpretation.explicitRequest =
         requestInterpretation.semanticTurn.explicitRequest;
@@ -310,6 +317,127 @@ export async function orchestrateDialogueTurn(
         requestInterpretation.semanticTurn.explicitRequest;
       requestInterpretation.confidence = requestInterpretation.semanticTurn.confidence;
     }
+  }
+  if (
+    resolvedContextual.kind === 'information_requested' &&
+    /means for next steps|general next-step options/i.test(resolvedContextual.resolvedMeaning ?? '')
+  ) {
+    if (requestInterpretation.semanticTurn) {
+      requestInterpretation.semanticTurn = {
+        ...requestInterpretation.semanticTurn,
+        topic: 'professional_interpretation',
+        primaryOperation: 'provide_options',
+        explicitRequest:
+          'Provide neutral general next-step options for discussing the demonstration result.',
+        directAnswerRequired: true,
+        requiresClarification: false,
+        confidence: Math.max(requestInterpretation.semanticTurn.confidence, 0.9),
+      };
+      requestInterpretation.topic = 'professional_interpretation';
+      requestInterpretation.operation = 'provide_options';
+      requestInterpretation.explicitRequest =
+        requestInterpretation.semanticTurn.explicitRequest;
+      requestInterpretation.confidence = requestInterpretation.semanticTurn.confidence;
+    }
+  }
+  if (
+    resolvedContextual.kind === 'information_requested' &&
+    /how the estimate was calculated/i.test(resolvedContextual.resolvedMeaning ?? '')
+  ) {
+    if (requestInterpretation.semanticTurn) {
+      requestInterpretation.semanticTurn = {
+        ...requestInterpretation.semanticTurn,
+        topic: 'calculator_inputs',
+        primaryOperation: 'list_information',
+        explicitRequest: 'Explain the input information used by the calculator.',
+        directAnswerRequired: true,
+        requiresClarification: false,
+        confidence: Math.max(requestInterpretation.semanticTurn.confidence, 0.9),
+      };
+      requestInterpretation.topic = 'calculator_inputs';
+      requestInterpretation.operation = 'list_information';
+      requestInterpretation.explicitRequest =
+        requestInterpretation.semanticTurn.explicitRequest;
+      requestInterpretation.confidence = requestInterpretation.semanticTurn.confidence;
+    }
+  }
+  if (
+    resolvedContextual.kind === 'information_requested' &&
+    /Answer that topic directly without asking another clarifying question/i.test(
+      resolvedContextual.resolvedMeaning ?? '',
+    )
+  ) {
+    if (requestInterpretation.semanticTurn) {
+      // Prefer the semantic interpretation of the user's restated question.
+      // Only force a generic direct-answer shell if it somehow stayed unclear.
+      if (
+        requestInterpretation.semanticTurn.topic === 'unclear' ||
+        requestInterpretation.semanticTurn.requiresClarification
+      ) {
+        requestInterpretation.semanticTurn = {
+          ...requestInterpretation.semanticTurn,
+          topic: 'professional_interpretation',
+          primaryOperation: 'answer_factual_question',
+          secondaryOperations: ['set_personalized_advice_boundary'],
+          explicitRequest:
+            'Answer the confirmed clarifying topic directly with educational population-level information and a personalized-advice boundary. Do not ask another clarifying question.',
+          userConstraints: ['direct educational answer', 'no clarifying loop'],
+          directAnswerRequired: true,
+          requiresClarification: false,
+          requiresMedicalEvidence: true,
+          confidence: Math.max(requestInterpretation.semanticTurn.confidence, 0.9),
+        };
+        requestInterpretation.topic = 'professional_interpretation';
+        requestInterpretation.operation = 'answer_factual_question';
+      } else {
+        requestInterpretation.semanticTurn = {
+          ...requestInterpretation.semanticTurn,
+          directAnswerRequired: true,
+          requiresClarification: false,
+          confidence: Math.max(requestInterpretation.semanticTurn.confidence, 0.9),
+        };
+      }
+      requestInterpretation.explicitRequest =
+        requestInterpretation.semanticTurn.explicitRequest;
+      requestInterpretation.confidence = requestInterpretation.semanticTurn.confidence;
+    }
+  }
+
+  // Schedule slot after lifestyle timing ask → lock in; do not nest another which-part question.
+  if (
+    isLifestyleScheduleChoiceTurn(
+      message,
+      previousAssistantResponse,
+      previousConversationMemory.lastRouteTopic,
+    ) &&
+    requestInterpretation.semanticTurn
+  ) {
+    const slot = extractChosenScheduleLabel(message);
+    const activity =
+      extractActivityFromAssistantReply(previousAssistantResponse) ?? 'movement';
+    requestInterpretation.semanticTurn = {
+      ...requestInterpretation.semanticTurn,
+      topic: 'lifestyle_risk_information',
+      primaryOperation: 'answer_general_health_question',
+      secondaryOperations: [
+        'explain_lifestyle_relationship',
+        'set_personalized_advice_boundary',
+      ],
+      stance: 'accepting',
+      explicitRequest: `Lock in the user's chosen activity schedule (${slot} for ${activity}). Affirm this as a realistic step, briefly reinforce population-level physical-activity benefits, and do not ask another which-part or when-during timing clarifying question.`,
+      propositions: [{ text: message, status: 'preference' }],
+      userConstraints: [`chosen schedule: ${slot}`, `chosen activity: ${activity}`],
+      directAnswerRequired: true,
+      requiresClarification: false,
+      requiresMedicalEvidence: true,
+      requiresSafetyBoundary: false,
+      confidence: Math.max(requestInterpretation.semanticTurn.confidence, 0.93),
+    };
+    requestInterpretation.topic = 'lifestyle_risk_information' as typeof requestInterpretation.topic;
+    requestInterpretation.operation =
+      'answer_general_health_question' as typeof requestInterpretation.operation;
+    requestInterpretation.explicitRequest = requestInterpretation.semanticTurn.explicitRequest;
+    requestInterpretation.confidence = requestInterpretation.semanticTurn.confidence;
   }
 
   // Activity named after lifestyle-motivation ask → reinforce, do not jump to clinician action-planning.
@@ -341,8 +469,9 @@ export async function orchestrateDialogueTurn(
       requiresSafetyBoundary: false,
       confidence: Math.max(requestInterpretation.semanticTurn.confidence, 0.92),
     };
-    requestInterpretation.topic = 'lifestyle_risk_information';
-    requestInterpretation.operation = 'answer_general_health_question';
+    requestInterpretation.topic = 'lifestyle_risk_information' as typeof requestInterpretation.topic;
+    requestInterpretation.operation =
+      'answer_general_health_question' as typeof requestInterpretation.operation;
     requestInterpretation.explicitRequest = requestInterpretation.semanticTurn.explicitRequest;
     requestInterpretation.confidence = requestInterpretation.semanticTurn.confidence;
   }
@@ -590,7 +719,7 @@ export async function orchestrateDialogueTurn(
               : strategyTheory.communicationTechnique,
           objective: theoryApplication.communicationObjective,
           sourceIds:
-            strategyTheory.sourceIds.length > 0
+            (strategyTheory.sourceIds?.length ?? 0) > 0
               ? strategyTheory.sourceIds
               : (['MERCADO-ECA-MI-2023'] as typeof strategyTheory.sourceIds),
         }
@@ -1194,6 +1323,9 @@ export async function orchestrateDialogueTurn(
             riskResult,
             calculation: calculationResult,
             conversationMemory,
+            recentAssistantMessages,
+            retrievedEvidence,
+            latestMessage: message,
           }),
         );
         responseMode = 'local-rag-fallback';
@@ -1205,6 +1337,29 @@ export async function orchestrateDialogueTurn(
         });
       }
     }
+  }
+
+  // Hard stop: user already chose a lifestyle time slot, but the reply still
+  // nests another which-part timing question (common Groq loop).
+  if (
+    !fixedSafetyReply &&
+    isLifestyleScheduleChoiceTurn(
+      message,
+      previousAssistantResponse,
+      previousConversationMemory.lastRouteTopic,
+    ) &&
+    isLifestyleScheduleClarifyQuestion(reply)
+  ) {
+    reply = validateResponse(
+      lifestyleScheduleLockInFallback(
+        message,
+        previousAssistantResponse,
+        retrievedEvidence,
+        semanticTurn,
+      ),
+    );
+    responseMode = 'local-rag-fallback';
+    fallbackUsed = true;
   }
 
   // Always re-run progression validators on the reply that will be returned.

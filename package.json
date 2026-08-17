@@ -15,6 +15,7 @@
     "check": "npm run test && npm run evidence:check && npm run typecheck && npm run build"
   },
   "dependencies": {
+    "@heygen/liveavatar-web-sdk": "^0.0.18",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

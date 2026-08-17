@@ -3,10 +3,8 @@
 # fill in real values.
 #
 # `.dev.vars` is loaded automatically by `wrangler`/`vite dev` for local
-# development. GROQ_API_KEY is optional: without it, the chat pipeline uses
-# only the local, deterministic classifier and response generator (see
-# docs/PHASE_5_GROQ_DYNAMIC_DIALOGUE.md). It is never exposed to the
-# frontend, API responses, developer details, logs, or the session export.
+# development. Keys here are never exposed to the frontend, API responses,
+# developer details, logs, or the session export.
 
 GROQ_API_KEY=
 GROQ_MODEL=openai/gpt-oss-20b
@@ -15,5 +13,20 @@ GROQ_MODEL=openai/gpt-oss-20b
 # groq-dynamic-rag replies (helps avoid rate_limit on free tier).
 GROQ_LOCAL_CLASSIFICATION=1
 
-# LIVEAVATAR_API_KEY=
-# LIVEAVATAR_AVATAR_ID=
+# Optional Groq TTS overrides for LiveAvatar LITE (defaults: Orpheus + hannah).
+# First use: org admin must accept Orpheus terms once at
+# https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english
+# GROQ_TTS_MODEL=canopylabs/orpheus-v1-english
+# GROQ_TTS_VOICE=hannah
+
+# LiveAvatar permanent API key — Worker-side only. Do NOT use VITE_*.
+# Add the real key manually; never paste it into chat or source code.
+LIVEAVATAR_API_KEY="your-liveavatar-api-key"
+
+# Defaults also live in wrangler.jsonc:
+#   LIVEAVATAR_MODE=LITE
+#   LIVEAVATAR_SANDBOX=false   (doctor Ann — spends ~1 credit/min; keep demos ≤120s)
+#   LIVEAVATAR_DEV_MAX_SESSION_SECONDS=120
+#
+# For free Wayne-only testing (no credits):
+# LIVEAVATAR_SANDBOX=true

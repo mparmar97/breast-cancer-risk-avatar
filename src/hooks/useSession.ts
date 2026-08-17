@@ -15,6 +15,7 @@ import type {
   Screen,
   SessionData,
 } from '../types';
+import type { LiveAvatarSessionExportMeta } from '../liveavatar/types';
 
 interface AsyncStatus {
   loading: boolean;
@@ -35,6 +36,15 @@ export function useSession() {
   const [calculatorStatus, setCalculatorStatus] = useState<AsyncStatus>(IDLE_STATUS);
   const [chatStatus, setChatStatus] = useState<AsyncStatus>(IDLE_STATUS);
   const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
+  const [liveAvatarExportMeta, setLiveAvatarExportMetaState] =
+    useState<LiveAvatarSessionExportMeta | null>(null);
+
+  const setLiveAvatarExportMeta = useCallback((meta: LiveAvatarSessionExportMeta) => {
+    setLiveAvatarExportMetaState((prev) => {
+      if (prev && JSON.stringify(prev) === JSON.stringify(meta)) return prev;
+      return meta;
+    });
+  }, []);
 
   useEffect(() => {
     saveSession(session);
@@ -258,12 +268,19 @@ export function useSession() {
   }, []);
 
   const downloadSessionJson = useCallback(() => {
-    downloadJson(`vare-session-${Date.now()}.json`, buildSessionExport(session));
-  }, [session]);
+    downloadJson(
+      `vare-session-${Date.now()}.json`,
+      buildSessionExport(session, liveAvatarExportMeta),
+    );
+  }, [session, liveAvatarExportMeta]);
 
   const downloadSessionCsv = useCallback(() => {
-    downloadText(`vare-session-${Date.now()}.csv`, buildSessionCsv(session), 'text/csv');
-  }, [session]);
+    downloadText(
+      `vare-session-${Date.now()}.csv`,
+      buildSessionCsv(session, liveAvatarExportMeta),
+      'text/csv',
+    );
+  }, [session, liveAvatarExportMeta]);
 
   return {
     session,
@@ -278,5 +295,6 @@ export function useSession() {
     resetSession,
     downloadSessionJson,
     downloadSessionCsv,
+    setLiveAvatarExportMeta,
   };
 }

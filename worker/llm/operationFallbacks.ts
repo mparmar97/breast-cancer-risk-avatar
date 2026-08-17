@@ -9,6 +9,7 @@ import type { ResponsePlan } from '../dialogue/deriveResponsePlan';
 import { deriveResponsePlan } from '../dialogue/deriveResponsePlan';
 import { createDefaultConversationMemory } from '../dialogue/conversationMemory';
 import type { NaturalFrequencyResult } from '../risk/convertRiskToNaturalFrequency';
+import type { RetrievedEvidence } from '../rag/types';
 import type { RiskResult } from '../types';
 import { understandingNextStepFallback } from './fallbackCopy';
 import { generatePlanAwareFallback } from './planAwareFallback';
@@ -18,6 +19,9 @@ export interface OperationFallbackInput {
   riskResult: RiskResult;
   calculation?: NaturalFrequencyResult | null;
   plan?: ResponsePlan;
+  retrievedEvidence?: RetrievedEvidence[];
+  latestMessage?: string;
+  recentAssistantMessages?: string[];
 }
 
 /**
@@ -42,6 +46,9 @@ export function generateOperationFallback(input: OperationFallbackInput): string
       plan,
       riskResult: input.riskResult,
       calculation: input.calculation,
+      retrievedEvidence: input.retrievedEvidence,
+      latestMessage: input.latestMessage,
+      recentAssistantMessages: input.recentAssistantMessages,
     });
   }
 

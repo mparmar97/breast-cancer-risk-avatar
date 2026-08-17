@@ -25,6 +25,8 @@ export type ResponseGoal =
   | 'explain_calculator_inputs'
   | 'explain_calculator_result_source'
   | 'explain_calculator_limitations'
+  | 'explain_calculator_purpose'
+  | 'explain_calculator_how_it_works'
   | 'provide_next_step_options'
   | 'answer_general_lifestyle_question_with_boundary'
   | 'provide_preparation_information'
@@ -127,6 +129,16 @@ const CONTRACTS: Record<ResponseGoal, ResponseContract> = {
     mustAddress: ['why a population probability cannot predict one individual outcome'],
     mustNotDo: ['restart generic percentage definition without answering the limitation'],
     requiredConcepts: ['calculator limitations', 'uncertainty'],
+  },
+  explain_calculator_purpose: {
+    mustAddress: ['purpose of the Gail model / risk assessment tool', 'probability over time'],
+    mustNotDo: ['ask another clarifying question', 'diagnose', 'give personalized clinical advice'],
+    requiredConcepts: ['Gail model', 'invasive breast cancer probability'],
+  },
+  explain_calculator_how_it_works: {
+    mustAddress: ['how the tool estimates risk from selected inputs', 'population-level probability'],
+    mustNotDo: ['ask another clarifying question', 'diagnose'],
+    requiredConcepts: ['selected inputs', 'population estimate'],
   },
   provide_next_step_options: {
     mustAddress: ['neutral general next-step options'],
@@ -339,6 +351,11 @@ export function selectPrimaryGoal(
   }
   if (turn.primaryOperation === 'verify_understanding') return 'confirm_understanding';
   if (turn.topic === 'calculator_inputs') return 'explain_calculator_inputs';
+  if (turn.topic === 'calculator_applicability') {
+    return turn.userConstraints.some((c) => /how it works/i.test(c))
+      ? 'explain_calculator_how_it_works'
+      : 'explain_calculator_purpose';
+  }
   if (
     turn.topic === 'calculator_validation' ||
     turn.topic === 'calculator_result_source' ||
@@ -361,7 +378,9 @@ export function selectPrimaryGoal(
     .toLowerCase();
   const lifestyleFromWording =
     detectSemanticFeatures(userWording).asksLifestyleFocus ||
-    /\b(physical activity|exercise|fitness|life[- ]?style|motivational guide)\b/.test(userWording);
+    /\b(physical activity|exercise|fitness|life[- ]?style|motivational guide|daily routine|reduce .{0,40}risk|fit .{0,30}(routine|day|schedule))\b/.test(
+      userWording,
+    );
   if (
     turn.topic === 'lifestyle_risk_information' ||
     turn.primaryOperation === 'answer_general_health_question' ||

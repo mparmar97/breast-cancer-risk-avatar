@@ -1,4 +1,4 @@
-import { isClosingUtterance } from '../dialogue/closingSignals';
+import { isClosingUtterance, isGratitudeUtterance } from '../dialogue/closingSignals';
 import { assertsUnderstandingUtterance } from '../dialogue/understandingSignals';
 import { asksWhoToContact, normalizeUserText } from '../dialogue/normalizeUserText';
 import {
@@ -118,7 +118,7 @@ const CORRECTION_PATTERN =
   /\b(no,? that('?s| is) not what i (meant|mean)|that('?s| is) not what i (meant|mean)|i (meant|mean) something else|you misunderstood)\b/;
 
 const DRAFT_HELP_PATTERN =
-  /\b((help|helping|can you|could you).{0,40}(write|draft|wording|message)|what to write|not sure what to write|do not know what to write|don'?t know what to write|dont know what to write|help (me )?write|write a (portal )?message)\b/;
+  /\b((help|helping|can you|could you).{0,40}(write|draft|wording|message|script)|what to write|what to say|not sure what to write|do not know what to write|don'?t know what to write|dont know what to write|help (me )?write|write a (portal )?message|looking to use a script|use (a )?script|call script|phone script)\b/;
 
 const DRAFT_REVIEW_PATTERN =
   /\b(does (this|the) (message|draft|wording|text) (sound|look|read|seem) (clear|ok|okay|good|fine)|is (this|the) (message|draft|wording) (clear|ok|okay|good)|review (this|my) (draft|message|wording))\b/;
@@ -127,7 +127,7 @@ const DRAFT_ACCEPT_PATTERN =
   /\b(that (draft|message|wording) sounds? clear|that looks good|the (message|draft|wording) is fine|i like that wording|i can use this|that works for me|i('ll| will) use that (message|draft)|looks good|yes,? that is clear|no changes (are )?needed|the wording is clear)\b/;
 
 const NEXT_STEP_PATTERN =
-  /\b(what should i do next|what (do|can) i do next|what'?s next|whats next|next step|what now|how (do|should) i (follow up|proceed)|ok tell me next|unsure what to do|do not know what to do|don'?t know what to do|dont know what to do)\b/;
+  /\b(what should i do next|what (do|can) i do next|what'?s next|whats next|next steps?|what now|how (do|should) i (follow up|proceed)|ok tell me next|unsure what to do|do not know what to do|don'?t know what to do|dont know what to do|mean.{0,40}next steps?|what they mean for)\b/;
 
 const CORRECT_UNDERSTANDING_PATTERN =
   /\bi (understand|know|realize|get it)\b[^.?!]*\b(probability|percentage|estimate|risk|chance|result|number)\b|\b(the number makes sense|i get the result|understand the (result|percentage|number)|that (clicks|makes sense now)|gotcha on the (percentage|number|estimate))\b/;
@@ -374,16 +374,38 @@ export function classifyLocalStateDetailed(
   const isReadyAction = READY_ACTION_PATTERN.test(normalized);
   const isConfident = CONFIDENCE_PATTERN.test(normalized);
 
-  const emotionSignal = detectEmotion(normalized, isReadyAction);
-  const barrierSignal = detectBarrier(normalized, emotionSignal, isConfident);
+  const closingOrThanks =
+    isClosingUtterance(normalized) || isGratitudeUtterance(normalized) || GRATITUDE_PATTERN.test(normalized);
+  const visitWrapCommitment =
+    /\b(i('ll| will)|i am going to|im going to)\s+(bring|take|use).{0,40}(these |the )?(questions?|this).{0,40}(to )?(my |the )?(visit|appointment)\b/.test(
+      normalized,
+    ) ||
+    /\b(thanks|thank you|thx|appreciate).{0,120}\b(bring|take|use|ask).{0,60}(questions?|this|these|them|it).{0,40}(visit|appointment)\b/.test(
+      normalized,
+    );
+
+  const expressedEmotion = detectEmotion(normalized, isReadyAction || visitWrapCommitment);
+  const emotionSignal = expressedEmotion ?? (closingOrThanks ? ('calm' as Emotion) : null);
+  const barrierSignal = closingOrThanks
+    ? ('none' as Barrier)
+    : detectBarrier(normalized, emotionSignal, isConfident);
   const understandingSignal = detectUnderstanding(normalized, safetyFlag);
-  const readinessSignals = detectReadinessAndSelfEfficacy(normalized, barrierSignal, isReadyAction, isConfident);
+  const readinessSignals = detectReadinessAndSelfEfficacy(
+    normalized,
+    barrierSignal,
+    isReadyAction || visitWrapCommitment,
+    isConfident,
+  );
   const readinessFromRules = readinessSignals.readiness;
   const selfEfficacyFromRules = readinessSignals.selfEfficacy;
 
   let readinessSignal = readinessFromRules;
   if (!readinessSignal && emotionSignal === 'dismissive') {
     readinessSignal = 'not_considering';
+  }
+  // Closing wrap-ups should not keep the default "unclear" readiness.
+  if (!readinessSignal && closingOrThanks && fallback.readiness === 'unclear') {
+    readinessSignal = visitWrapCommitment ? 'ready' : 'considering';
   }
 
   const hasBehaviorSignal =
@@ -392,7 +414,8 @@ export function classifyLocalStateDetailed(
     barrierSignal !== null ||
     readinessFromRules !== null ||
     selfEfficacyFromRules !== null ||
-    readinessSignal !== null;
+    readinessSignal !== null ||
+    closingOrThanks;
 
   let confidence = createDefaultAdaptiveState().confidence;
   if (safetyFlag === 'diagnosis_request') {
@@ -409,7 +432,7 @@ export function classifyLocalStateDetailed(
     understanding: understandingSignal ?? fallback.understanding,
     emotion: emotionSignal ?? fallback.emotion,
     barrier: barrierSignal ?? fallback.barrier,
-    selfEfficacy: selfEfficacyFromRules ?? fallback.selfEfficacy,
+    selfEfficacy: selfEfficacyFromRules ?? (visitWrapCommitment ? 'moderate' : fallback.selfEfficacy),
     readiness: readinessSignal ?? fallback.readiness,
     safetyFlag,
     confidence,
@@ -447,8 +470,16 @@ export function classifyLocalStateDetailed(
                         ? 'stated a concrete intention to act'
                         : NOT_EXPRESSED,
     understanding: understandingSignal ? `local pattern match: ${understandingSignal}` : NOT_EXPRESSED,
-    emotion: emotionSignal ? `local pattern match: ${emotionSignal}` : NOT_EXPRESSED,
-    barrier: barrierSignal ? `local pattern match: ${barrierSignal}` : NOT_EXPRESSED,
+    emotion: expressedEmotion
+      ? `local pattern match: ${expressedEmotion}`
+      : emotionSignal
+        ? 'closing wrap-up: calm'
+        : NOT_EXPRESSED,
+    barrier: closingOrThanks
+      ? 'closing wrap-up: none'
+      : barrierSignal
+        ? `local pattern match: ${barrierSignal}`
+        : NOT_EXPRESSED,
     selfEfficacy: selfEfficacyFromRules ? `local pattern match: ${selfEfficacyFromRules}` : NOT_EXPRESSED,
     readiness: readinessSignal ? `local pattern match: ${readinessSignal}` : NOT_EXPRESSED,
     safetyFlag: safetyFlag !== 'none' ? `local pattern match: ${safetyFlag}` : NOT_EXPRESSED,

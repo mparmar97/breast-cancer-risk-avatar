@@ -98,7 +98,8 @@ export function planDecisionSupportTurn(input: PlanDecisionSupportTurnInput): De
         mustAddress,
         mustNotAssume,
         preserveSelectedOption,
-        shouldAskQuestion: true,
+        // If an option is already known, deliver support instead of re-asking.
+        shouldAskQuestion: !preserveSelectedOption,
       };
     case 'prepare_questions':
       mustAddress.push(
@@ -111,7 +112,7 @@ export function planDecisionSupportTurn(input: PlanDecisionSupportTurnInput): De
         mustAddress,
         mustNotAssume,
         preserveSelectedOption,
-        shouldAskQuestion: true,
+        shouldAskQuestion: false,
       };
     case 'review_draft':
       mustAddress.push('whether the draft wording is clear and appropriate');

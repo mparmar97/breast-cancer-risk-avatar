@@ -37,4 +37,33 @@ describe('gratitude progression', () => {
     expect(result.response).not.toMatch(/what would be most useful right now/i);
     expect(result.dialogueStrategy).toBe('close_supportively');
   });
+
+  it('closes when thanks + bringing questions to a visit (no menu reopen)', async () => {
+    const turn = interpretSemanticTurnLocal({
+      latestMessage: "Thanks — I'll bring these questions to my visit.",
+      riskResult: risk,
+    });
+    expect(turn.topic).toBe('closing');
+    expect(turn.primaryOperation).toBe('close');
+
+    const result = await orchestrateDialogueTurn(envNoGroq, {
+      latestMessage: "Thanks — I'll bring these questions to my visit.",
+      recentConversation: [
+        {
+          role: 'assistant',
+          content:
+            'Here are a few general questions you could ask a healthcare professional about a demonstration risk estimate.',
+        },
+      ],
+      riskResult: risk,
+    });
+
+    expect(result.dialogueStrategy).toBe('close_supportively');
+    expect(result.response.toLowerCase()).toMatch(/welcome|glad|return anytime|anytime/);
+    expect(result.response).not.toMatch(/what would be most useful right now/i);
+    // Closing should not leave default uncertain emotion / unclear readiness.
+    expect(result.adaptiveState.emotion).toBe('calm');
+    expect(result.adaptiveState.barrier).toBe('none');
+    expect(result.adaptiveState.readiness).not.toBe('unclear');
+  });
 });

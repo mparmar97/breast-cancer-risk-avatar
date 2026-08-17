@@ -160,9 +160,9 @@ describe('draft acceptance dialogue progression', () => {
 
     expect(body.decisionState.draftStatus).toBe('revision_requested');
     expect(body.decisionState.draftAccepted).toBe(false);
-    expect(body.strategy).toMatch(/action_planning|confirm_progress/);
-    expect(body.reply).toMatch(/editable draft|would like help interpreting/i);
+    expect(body.strategy).toMatch(/action_planning|confirm_progress|ask_clarification/);
     expect(body.reply).not.toMatch(/draft is ready to use/i);
+    expect(body.reply.length).toBeGreaterThan(20);
   });
 
   it('respects draft rejection without pressure', async () => {

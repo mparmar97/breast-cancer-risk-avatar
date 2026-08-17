@@ -21,7 +21,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 function isVitestRuntime(): boolean {
-  return typeof process !== 'undefined' && Boolean(process.env?.VITEST);
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  return Boolean(proc?.env?.VITEST);
 }
 
 /** Backoff before a single automatic retry. Zero in Vitest so unit tests stay fast. */

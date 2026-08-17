@@ -30,11 +30,20 @@ export default function CalculatorScreen({
   error,
 }: CalculatorScreenProps) {
   const [inputs, setInputs] = useState<CalculatorInputs>(DEFAULT_INPUTS);
+  // Keep age as editable text so users can clear/retype without snapping back to 35.
+  const [ageText, setAgeText] = useState(String(DEFAULT_INPUTS.age));
+  const [ageError, setAgeError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
-    onSubmitInputs(inputs);
+    const parsedAge = Number.parseInt(ageText.trim(), 10);
+    if (!Number.isFinite(parsedAge) || parsedAge < 35 || parsedAge > 85) {
+      setAgeError('Enter a current age between 35 and 85.');
+      return;
+    }
+    setAgeError(null);
+    onSubmitInputs({ ...inputs, age: parsedAge });
   }
 
   return (
@@ -56,16 +65,20 @@ export default function CalculatorScreen({
             type="number"
             min={35}
             max={85}
+            inputMode="numeric"
             required
-            value={inputs.age}
+            value={ageText}
             disabled={loading}
-            onChange={(e) =>
-              setInputs((prev) => ({
-                ...prev,
-                age: Number.parseInt(e.target.value, 10) || 35,
-              }))
-            }
+            onChange={(e) => {
+              setAgeText(e.target.value);
+              if (ageError) setAgeError(null);
+            }}
           />
+          {ageError && (
+            <span className="field-error" role="alert">
+              {ageError}
+            </span>
+          )}
         </label>
 
         <label className="field">

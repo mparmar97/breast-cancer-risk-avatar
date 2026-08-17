@@ -7,6 +7,7 @@ import type { RequestInterpretation } from './currentTurnInterpretation';
 import { deriveResponsePlan } from './deriveResponsePlan';
 import type { ResolvedShortReply } from './resolveShortReply';
 import { detectSemanticFeatures } from './semanticTurn';
+import { detectClinicianSpecialty } from './clinicianSpecialty';
 import {
   NO_PENDING_ITEM,
   type AssistantDialogueAct,
@@ -49,6 +50,32 @@ const BASE_MUST_NOT_ASSUME: readonly string[] = [
 
 const DEFAULT_PORTAL_DRAFT =
   'Hello, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it in the context of my personal and family history. Please advise whether a discussion would be appropriate. Thank you.';
+
+const DEFAULT_PHONE_SCRIPT =
+  'Hi, I recently received a demonstration breast-cancer risk estimate and would like help interpreting it with my personal and family history. I would like to discuss what this number means for me.';
+
+function isPhoneCommunicationOption(option: string | null | undefined): boolean {
+  return Boolean(option && /\b(phone|call)\b/i.test(option));
+}
+
+function draftForOption(option: string | null | undefined): {
+  draftText: string;
+  pendingLabel: string;
+  draftPurpose: string;
+} {
+  if (isPhoneCommunicationOption(option)) {
+    return {
+      draftText: DEFAULT_PHONE_SCRIPT,
+      pendingLabel: 'editable phone-call script',
+      draftPurpose: 'phone script to discuss a demonstration risk estimate with the office',
+    };
+  }
+  return {
+    draftText: DEFAULT_PORTAL_DRAFT,
+    pendingLabel: 'editable portal message draft',
+    draftPurpose: 'ask a clinic to help interpret a demonstration risk estimate',
+  };
+}
 
 function secondaryGoalFor(secondaryIntents: Intent[]): string | undefined {
   if (secondaryIntents.includes('express_emotion')) {
@@ -178,7 +205,44 @@ function planFromRequestInterpretation(
         },
         memory,
       );
-    case 'list_information':
+    case 'list_information': {
+      const clinicianPrep =
+        interpretation.topic === 'decision_support' ||
+        /clinician|specialist|oncologist|surgeon|radiologist|questions the user could ask/i.test(
+          interpretation.explicitRequest,
+        ) ||
+        Boolean(interpretation.entities?.selectedOption && detectClinicianSpecialty(interpretation.entities.selectedOption));
+      if (clinicianPrep) {
+        const specialty =
+          interpretation.entities?.selectedOption &&
+          detectClinicianSpecialty(interpretation.entities.selectedOption)
+            ? interpretation.entities.selectedOption
+            : null;
+        return finish(
+          {
+            ...base,
+            primaryGoal: 'list_questions_for_clinician',
+            dialogueAct: 'explain_information',
+            mustAddress: [
+              specialty
+                ? `general preparation for talking with a ${specialty} about a demonstration risk estimate`
+                : 'a short list of general questions the user could ask a healthcare professional about a demonstration risk estimate',
+              'boundary that these are general preparation ideas, not personalized clinical advice',
+            ],
+            mustNotDo: [
+              'ask which subtype of specialist the user meant',
+              'ask what topic the visit should focus on',
+              'draft a portal or clinic message unless explicitly requested',
+            ],
+            mustNotAssume,
+            shouldAskQuestion: false,
+            questionPurpose: 'none',
+            nextPendingItem: NO_PENDING_ITEM,
+            selectedOption: specialty ?? memory.selectedCommunicationOption,
+          },
+          memory,
+        );
+      }
       return finish(
         {
           ...base,
@@ -194,6 +258,7 @@ function planFromRequestInterpretation(
         },
         memory,
       );
+    }
     case 'explain':
       if (interpretation.topic === 'calculator_limitations') {
         return finish(
@@ -212,7 +277,10 @@ function planFromRequestInterpretation(
       }
       return null;
     case 'draft':
-    case 'revise':
+    case 'revise': {
+      const draft = draftForOption(
+        interpretation.entities?.selectedOption ?? memory.selectedCommunicationOption,
+      );
       return finish(
         {
           ...base,
@@ -236,14 +304,15 @@ function planFromRequestInterpretation(
           shouldAskQuestion: false,
           nextPendingItem: {
             type: 'proposed_draft',
-            text: 'editable portal message draft',
-            draftText: DEFAULT_PORTAL_DRAFT,
-            draftPurpose: 'ask a clinic to help interpret a demonstration risk estimate',
+            text: draft.pendingLabel,
+            draftText: draft.draftText,
+            draftPurpose: draft.draftPurpose,
             expectedReplyType: 'review_or_acceptance',
           },
         },
         memory,
       );
+    }
     case 'provide_options':
       return finish(
         {
@@ -359,6 +428,9 @@ export function planDialogueTurn(input: PlanDialogueTurnInput): DialogueTurnPlan
     // Confirm/reject on message_drafting must not reopen draft proposal.
     const needsProposedDraftPending =
       op === 'draft' || op === 'revise' || semanticOp === 'revise';
+    const proposedDraft = draftForOption(
+      semanticTurn.entities?.selectedOption ?? memory.selectedCommunicationOption,
+    );
 
     return finish(
       {
@@ -386,9 +458,9 @@ export function planDialogueTurn(input: PlanDialogueTurnInput): DialogueTurnPlan
         nextPendingItem: needsProposedDraftPending
           ? {
               type: 'proposed_draft',
-              text: 'editable portal message draft',
-              draftText: DEFAULT_PORTAL_DRAFT,
-              draftPurpose: 'ask a clinic to help interpret a demonstration risk estimate',
+              text: proposedDraft.pendingLabel,
+              draftText: proposedDraft.draftText,
+              draftPurpose: proposedDraft.draftPurpose,
               expectedReplyType: 'review_or_acceptance',
             }
           : responsePlan.shouldAskQuestion && responsePlan.questionPurpose === 'timing'
@@ -535,6 +607,7 @@ export function planDialogueTurn(input: PlanDialogueTurnInput): DialogueTurnPlan
   }
 
   if (primaryIntent === 'request_draft_help') {
+    const draft = draftForOption(memory.selectedCommunicationOption);
     return finish(
       {
         primaryGoal: 'provide_practical_help',
@@ -543,7 +616,10 @@ export function planDialogueTurn(input: PlanDialogueTurnInput): DialogueTurnPlan
         mustAddress: [
           optionSelected
             ? `preserve the selected communication option: ${memory.selectedCommunicationOption}`
-            : 'the user can access a portal or messaging channel',
+            : isPhoneCommunicationOption(memory.selectedCommunicationOption) ||
+                /phone/i.test(draft.pendingLabel)
+              ? 'provide an editable phone-call script the user can adapt'
+              : 'the user can access a portal or messaging channel',
           'provide an editable draft the user can adapt',
         ],
         mustNotAssume: [
@@ -552,13 +628,13 @@ export function planDialogueTurn(input: PlanDialogueTurnInput): DialogueTurnPlan
           'that the user wants another readiness question',
         ],
         unresolvedNeed: 'provide an editable draft',
-        shouldAskQuestion: true,
-        questionPurpose: 'action_planning',
+        shouldAskQuestion: false,
+        questionPurpose: 'none',
         nextPendingItem: {
           type: 'proposed_draft',
-          text: 'editable portal message draft',
-          draftText: DEFAULT_PORTAL_DRAFT,
-          draftPurpose: 'ask a clinic to help interpret a demonstration risk estimate',
+          text: draft.pendingLabel,
+          draftText: draft.draftText,
+          draftPurpose: draft.draftPurpose,
           expectedReplyType: 'review_or_acceptance',
         },
       },

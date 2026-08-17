@@ -30,7 +30,10 @@ export function riskExplanationFallback(riskResult?: RiskResult | null): string 
   const percent = riskResult?.fiveYearRisk;
   const horizonRaw = String(riskResult?.riskHorizon ?? 'five years');
   const horizon = /five|5/i.test(horizonRaw) ? 'five years' : horizonRaw;
-  const level = riskResult?.riskLevel ? String(riskResult.riskLevel) : '';
+  // Historical field name was riskLevel; RiskResult exposes riskBranch.
+  // Keep prior empty-level behavior unless an explicit legacy riskLevel is present.
+  const legacyLevel = (riskResult as { riskLevel?: string } | null | undefined)?.riskLevel;
+  const level = legacyLevel ? String(legacyLevel) : '';
   const levelClause = level
     ? ` The tool labels this demonstration estimate as ${level}, which compares it with the tool's reference level — it still does not diagnose current cancer.`
     : '';

@@ -173,11 +173,21 @@ export interface CurrentTurnEvidence {
   safetyFlag: string;
 }
 
+export interface LiveAvatarConfigStatus {
+  enabled: boolean;
+  sandbox: boolean;
+  configured: boolean;
+  avatarConfigured: boolean;
+  ttsConfigured: boolean;
+  missingReason?: string;
+}
+
 export interface ConfigStatus {
   backendConnected: boolean;
   groqConfigured: boolean;
   groqModel: string;
   dynamicModeAvailable: boolean;
+  liveAvatar?: LiveAvatarConfigStatus;
 }
 
 // --- General dynamic multi-turn dialogue manager types --------------------

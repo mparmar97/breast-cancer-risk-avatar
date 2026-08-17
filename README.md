@@ -25,9 +25,14 @@ evidence-grounded dialogue generation and turn classification — see
 Groq is entirely optional: without a `GROQ_API_KEY`, the application falls
 back automatically to the same local, deterministic classifier and
 response generator used since Phase 3/4, grounded in the same local,
-keyword-based evidence retriever (no external vector database). LiveAvatar
-(video presenter) and Cloudflare Vectorize are **not** implemented in this
-phase. See [`docs/RAG_ARCHITECTURE.md`](./docs/RAG_ARCHITECTURE.md) and
+keyword-based evidence retriever (no external vector database).
+
+As of Phase 6A, an optional **LiveAvatar LITE** embodiment layer can present
+already-validated replies as real-time avatar video. LiveAvatar never
+decides medical content — see
+[`docs/PHASE_6_LIVEAVATAR.md`](./docs/PHASE_6_LIVEAVATAR.md). Cloudflare
+Vectorize is still not used. See
+[`docs/RAG_ARCHITECTURE.md`](./docs/RAG_ARCHITECTURE.md) and
 [`docs/ADAPTIVE_STATE_MODEL.md`](./docs/ADAPTIVE_STATE_MODEL.md) for the
 deterministic layers this all still builds on.
 
@@ -72,6 +77,10 @@ deterministic layers this all still builds on.
   retrieval query, full source metadata, and generation diagnostics
   (response mode, repetition/regeneration, fallback reason) for the
   latest reply.
+- **Optional LiveAvatar LITE delivery** (`worker/liveavatar/`,
+  `src/liveavatar/`): user-started Sandbox avatar sessions; static Maya
+  fallback; TTS abstraction (speech requires a configured TTS provider);
+  adaptive embodiment policy for tone/pace only. API key stays Worker-side.
 
 ## Stack
 
@@ -139,6 +148,66 @@ chat pipeline on local, deterministic classification and generation.
 
 See [`docs/PHASE_5_GROQ_DYNAMIC_DIALOGUE.md`](./docs/PHASE_5_GROQ_DYNAMIC_DIALOGUE.md)
 for the full design, privacy handling, and fallback behavior.
+
+## LIVEAVATAR DEVELOPMENT SETUP
+
+LiveAvatar is optional. Without a key, chat continues with the static avatar
+and text only.
+
+### STEP 1
+
+Create/get an API key from the
+[LiveAvatar developer dashboard](https://app.liveavatar.com).
+
+### STEP 2
+
+Do **not** paste the key into source code, Vite env, React, README, chat, or
+tests. Never use `VITE_LIVEAVATAR_API_KEY`.
+
+### STEP 3
+
+Place it in the local Worker secret file (copy `.dev.vars.example` →
+`.dev.vars` if needed):
+
+```
+LIVEAVATAR_API_KEY="your-real-key"
+```
+
+Non-secret defaults live in `wrangler.jsonc` `[vars]`:
+
+- `LIVEAVATAR_ENABLED=true`
+- `LIVEAVATAR_MODE=LITE` (1 credit/min; Groq LLM + Groq TTS)
+- `LIVEAVATAR_SANDBOX=false` (doctor Ann — spends credits; demos ≤120s)
+- `LIVEAVATAR_DEV_MAX_SESSION_SECONDS=120`
+- `LIVEAVATAR_AVATAR_ID` (Ann Doctor Sitting)
+
+### STEP 4
+
+Doctor look uses production avatar credits on LITE (~1/min). Keep each session
+under 2 minutes. For free Wayne-only testing: `LIVEAVATAR_SANDBOX=true`.
+Budget plan: [`docs/LIVEAVATAR_CREDIT_BUDGET.md`](./docs/LIVEAVATAR_CREDIT_BUDGET.md).
+
+### STEP 5
+
+Run local development (`npm run dev`), open the chat screen, and click
+**Start avatar** (sessions never auto-start). Requires `GROQ_API_KEY` for
+LITE speech (Orpheus TTS) and `LIVEAVATAR_API_KEY` for video.
+
+### STEP 6
+
+For Cloudflare deployment, configure the Worker secret:
+
+```bash
+npx wrangler secret put LIVEAVATAR_API_KEY
+```
+
+Do not put the key in `[vars]`.
+
+LITE speech uses the same `GROQ_API_KEY` already configured for dialogue.
+
+Full design: [`docs/PHASE_6_LIVEAVATAR.md`](./docs/PHASE_6_LIVEAVATAR.md),
+[`docs/LIVEAVATAR_ARCHITECTURE.md`](./docs/LIVEAVATAR_ARCHITECTURE.md),
+[`docs/ADAPTIVE_EMBODIMENT_POLICY.md`](./docs/ADAPTIVE_EMBODIMENT_POLICY.md).
 
 ## Scripts
 
@@ -209,6 +278,16 @@ developer-only), `usedEvidenceIds`, `classificationMode`, `responseMode`,
 `fallbackReason`, and `timestamp`. No message content is persisted
 server-side, and the Groq API key is never included in this response.
 
+### LiveAvatar (Phase 6A)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/liveavatar/config` | Public flags (enabled/sandbox/configured) — never the API key |
+| `POST /api/liveavatar/session/start` | Create short-lived session token server-side |
+| `POST /api/liveavatar/session/end` | Stop session (`{ sessionToken }`) |
+| `POST /api/liveavatar/session/keep-alive` | REST keep-alive |
+| `POST /api/liveavatar/prepare-speech` | Embodiment policy + TTS prepare (dry-run delivery metadata) |
+
 ## Documentation
 
 | Doc | Covers |
@@ -220,6 +299,10 @@ server-side, and the Groq API key is never included in this response.
 | [`docs/SOURCE_REPLACEMENT_CHECKLIST.md`](./docs/SOURCE_REPLACEMENT_CHECKLIST.md) | How to vet and add a new evidence source |
 | [`docs/TEST_SCENARIOS.md`](./docs/TEST_SCENARIOS.md) | Manual test scripts for the dialogue engine |
 | [`docs/PHASE_5_GROQ_DYNAMIC_DIALOGUE.md`](./docs/PHASE_5_GROQ_DYNAMIC_DIALOGUE.md) | Groq-powered dynamic classification/generation, validation, repetition control, and local fallback |
+| [`docs/PHASE_6_LIVEAVATAR.md`](./docs/PHASE_6_LIVEAVATAR.md) | LiveAvatar LITE embodied delivery (Phase 6A) |
+| [`docs/LIVEAVATAR_CREDIT_BUDGET.md`](./docs/LIVEAVATAR_CREDIT_BUDGET.md) | Starter credit plan: sandbox for dev, ~2 min LITE demos |
+| [`docs/LIVEAVATAR_ARCHITECTURE.md`](./docs/LIVEAVATAR_ARCHITECTURE.md) | Worker/browser split, audio format, credit protection |
+| [`docs/ADAPTIVE_EMBODIMENT_POLICY.md`](./docs/ADAPTIVE_EMBODIMENT_POLICY.md) | Adaptive-state → delivery tone/pace (not facial theory mapping) |
 | [`docs/design-rationale.md`](./docs/design-rationale.md) | One-page design rationale and current-vs-planned scope |
 
 ## Development environment note (local machine)

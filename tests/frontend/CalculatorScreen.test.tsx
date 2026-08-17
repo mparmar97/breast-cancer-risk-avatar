@@ -74,4 +74,26 @@ describe('CalculatorScreen', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent(/unable to calculate/i);
   });
+
+  it('allows clearing and retyping current age before submit', async () => {
+    const user = userEvent.setup();
+    const onSubmitInputs = vi.fn();
+
+    render(
+      <CalculatorScreen
+        onSubmitInputs={onSubmitInputs}
+        onSelectScenario={vi.fn()}
+        loading={false}
+        error={null}
+      />,
+    );
+
+    const ageInput = screen.getByLabelText(/current age/i);
+    await user.clear(ageInput);
+    expect(ageInput).toHaveValue(null);
+
+    await user.type(ageInput, '52');
+    await user.click(screen.getByRole('button', { name: /calculate and continue/i }));
+    expect(onSubmitInputs).toHaveBeenCalledWith(expect.objectContaining({ age: 52 }));
+  });
 });

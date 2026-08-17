@@ -15,6 +15,14 @@ const TAKE_CARE_CLOSING_PATTERN =
 const THANKS_RESOLUTION_PATTERN =
   /\b(thanks|thank you|thx|appreciate( it| that)?).{0,60}(answers|answered|helps|helped|clarifies|clarified|that'?s all|that is all|i'?m done|im done|no (more|further) questions)\b/;
 
+/** Thanks + commitment to use the help at a visit/appointment (demo wrap-up). */
+const THANKS_VISIT_WRAP_PATTERN =
+  /\b(thanks|thank you|thx|appreciate( it| that)?).{0,120}\b(bring|take|use|ask).{0,60}(questions?|this|these|them|it).{0,40}(visit|appointment|doctor|clinician|provider|office)\b/;
+
+/** Action wrap-up without explicit thanks: "I'll bring these questions to my visit." */
+const VISIT_WRAP_PATTERN =
+  /\b(i('ll| will)|i am going to|im going to)\s+(bring|take|use).{0,40}(these |the )?(questions?|this).{0,40}(to )?(my |the )?(visit|appointment)\b/;
+
 const DONE_ALONE_PATTERN =
   /\b(i'?m done|im done|that'?s all( for now)?|that is all( for now)?|no (more|further) questions)\b/;
 
@@ -36,6 +44,8 @@ export function isClosingUtterance(message: string): boolean {
     FAREWELL_PATTERN.test(normalized) ||
     TAKE_CARE_CLOSING_PATTERN.test(normalized) ||
     THANKS_RESOLUTION_PATTERN.test(normalized) ||
+    THANKS_VISIT_WRAP_PATTERN.test(normalized) ||
+    VISIT_WRAP_PATTERN.test(normalized) ||
     DONE_ALONE_PATTERN.test(normalized)
   );
 }

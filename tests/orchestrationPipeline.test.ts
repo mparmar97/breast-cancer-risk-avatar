@@ -18,7 +18,12 @@ interface ChatBody {
   decisionSupportStrategy: string;
   decisionSupportTheoryConstruct: { theory: string };
   decisionTransition: { selectedOptionPreserved: boolean; informationNeedResolvedThisTurn: boolean };
-  dialogueTurnPlan: { primaryGoal: string; nextPendingItem?: { type: string; draftText?: string } };
+  dialogueTurnPlan: {
+    primaryGoal: string;
+    shouldAskQuestion?: boolean;
+    nextPendingItem?: { type: string; draftText?: string };
+  };
+  conversationMemory?: unknown;
   sources: Array<{ id: string }>;
   usedEvidenceIds: string[];
   responseMode: string;
@@ -165,6 +170,71 @@ describe('orchestrationPipeline', () => {
     expect(draft.strategy).toBe('action_planning');
     expect(draft.reply).toMatch(/draft|Hello,/i);
     expect(draft.reply).not.toMatch(/while working|time is the main obstacle/i);
+  });
+
+  it('delivers a portal message draft when asked for a portal script (no clarifying loop)', async () => {
+    const portal = await chat(
+      'Can you give me a short script I could send through the patient portal?',
+      [],
+      {
+        previousDecisionState: {
+          ...createDefaultDecisionSupportState(),
+          decisionTopic: 'how_to_follow_up',
+          decisionStage: 'option_clarification',
+          primaryDecisionalNeed: 'unclear_options',
+          informationNeedResolved: true,
+        },
+      },
+    );
+    expect(portal.currentTurnInterpretation.primaryIntent).toBe('request_draft_help');
+    expect(portal.dialogueTurnPlan.primaryGoal).toBe('provide_practical_help');
+    expect(portal.dialogueTurnPlan.shouldAskQuestion).toBe(false);
+    expect(portal.dialogueTurnPlan.nextPendingItem?.type).toBe('proposed_draft');
+    expect(portal.decisionState.selectedOption).toBe('portal message');
+    expect(portal.reply).toMatch(/portal message|editable draft|before sending/i);
+    expect(portal.reply).toMatch(/demonstration breast-cancer risk estimate/i);
+    expect(portal.reply).not.toMatch(/phone script|before you call/i);
+    expect(portal.reply).not.toMatch(/which part of the result|what you would like help doing next/i);
+  });
+
+  it('delivers a phone script for calling the office without clarifying preference', async () => {
+    const call = await chat('calling the office', [], {
+      previousDecisionState: {
+        ...createDefaultDecisionSupportState(),
+        decisionTopic: 'how_to_follow_up',
+        decisionStage: 'option_clarification',
+        primaryDecisionalNeed: 'unclear_options',
+        informationNeedResolved: true,
+      },
+    });
+    expect(call.decisionState.selectedOption).toBe('phone call');
+    expect(call.dialogueTurnPlan.primaryGoal).toBe('provide_practical_help');
+    expect(call.dialogueTurnPlan.shouldAskQuestion).toBe(false);
+    expect(call.dialogueTurnPlan.nextPendingItem?.type).toBe('proposed_draft');
+    expect(call.reply).toMatch(/phone script|I would like to discuss what this number means/i);
+    expect(call.reply).not.toMatch(/what kind of script|portal message or|which optional|most useful right now/i);
+    expect(call.reply).not.toMatch(/\?\s*$/);
+
+    const script = await chat('i am looking to use a script', [
+      { role: 'user', content: 'calling the office' },
+      { role: 'assistant', content: call.reply },
+    ], {
+      previousDecisionState: call.decisionState,
+      previousConversationMemory: call.conversationMemory,
+      previousState: {
+        understanding: 'correct',
+        emotion: 'uncertain',
+        barrier: 'none',
+        selfEfficacy: 'moderate',
+        readiness: 'preparing',
+        safetyFlag: 'none',
+        confidence: 0.7,
+      },
+      pendingItem: call.dialogueTurnPlan.nextPendingItem,
+    });
+    expect(script.decisionState.selectedOption).toBe('phone call');
+    expect(script.reply).toMatch(/script|draft|I would like to discuss what this number means/i);
+    expect(script.reply).not.toMatch(/What kind of script|guide your conversation|template for a message|most useful right now/i);
   });
 
   it('accepts a clear draft and then confirms tonight without re-asking timing', async () => {

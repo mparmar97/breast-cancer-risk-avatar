@@ -1,5 +1,6 @@
 import type { ChatDiagnostics, ChatMessage, SessionData } from '../types';
 import { SESSION_ANALYSIS_NOTES } from '../types';
+import type { LiveAvatarSessionExportMeta } from '../liveavatar/types';
 
 export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
@@ -48,16 +49,33 @@ export function computeTimeOnTaskSeconds(session: SessionData): number {
 }
 
 /** Enrich a session snapshot for download (R8 / D4). */
-export function buildSessionExport(session: SessionData): SessionData & {
+export function buildSessionExport(
+  session: SessionData,
+  liveAvatarMeta?: LiveAvatarSessionExportMeta | null,
+): SessionData & {
   timeOnTaskSeconds: number;
   analysisNotes: string;
   riskBranch: string | null;
+  avatarMode?: 'live' | 'static';
+  liveAvatarSandbox?: boolean;
+  liveAvatarSessionStarted?: boolean;
+  liveAvatarSessionDurationSeconds?: number;
+  liveAvatarFailures?: number;
+  avatarSpeechInterruptions?: number;
+  embodimentPoliciesUsed?: string[];
 } {
   return {
     ...session,
     timeOnTaskSeconds: computeTimeOnTaskSeconds(session),
     analysisNotes: SESSION_ANALYSIS_NOTES,
     riskBranch: session.riskResult?.riskBranch ?? null,
+    avatarMode: liveAvatarMeta?.avatarMode ?? 'static',
+    liveAvatarSandbox: liveAvatarMeta?.liveAvatarSandbox ?? true,
+    liveAvatarSessionStarted: liveAvatarMeta?.liveAvatarSessionStarted ?? false,
+    liveAvatarSessionDurationSeconds: liveAvatarMeta?.liveAvatarSessionDurationSeconds ?? 0,
+    liveAvatarFailures: liveAvatarMeta?.liveAvatarFailures ?? 0,
+    avatarSpeechInterruptions: liveAvatarMeta?.avatarSpeechInterruptions ?? 0,
+    embodimentPoliciesUsed: liveAvatarMeta?.embodimentPoliciesUsed ?? [],
   };
 }
 
@@ -186,8 +204,11 @@ function emitDeveloperRows(
  * CSV with session summary, transcript messages, and every developer-panel
  * diagnostic field (flattened + full JSON per assistant turn).
  */
-export function buildSessionCsv(session: SessionData): string {
-  const exported = buildSessionExport(session);
+export function buildSessionCsv(
+  session: SessionData,
+  liveAvatarMeta?: LiveAvatarSessionExportMeta | null,
+): string {
+  const exported = buildSessionExport(session, liveAvatarMeta);
   const lines: string[] = [CSV_HEADER.join(',')];
 
   lines.push(

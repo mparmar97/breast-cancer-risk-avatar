@@ -1,8 +1,10 @@
 import type { ChatDiagnostics, ConfigStatus } from '../types';
+import type { LiveAvatarDeveloperSnapshot } from '../liveavatar/types';
 
 interface DeveloperPanelProps {
   diagnostics: ChatDiagnostics | null;
   configStatus: ConfigStatus | null;
+  liveAvatar?: LiveAvatarDeveloperSnapshot | null;
 }
 
 function hasPlaceholderStatus(sources: ChatDiagnostics['sources'], dialogueDesignSources: ChatDiagnostics['dialogueDesignSources']): boolean {
@@ -42,7 +44,11 @@ function formatList(items: string[]): string {
  * are never merged — dialogue-design sources justify behavioral-theory
  * technique choices only and are never the factual basis for a reply.
  */
-export default function DeveloperPanel({ diagnostics, configStatus }: DeveloperPanelProps) {
+export default function DeveloperPanel({
+  diagnostics,
+  configStatus,
+  liveAvatar = null,
+}: DeveloperPanelProps) {
   const autoOpen = Boolean(import.meta.env.DEV && diagnostics);
   const sources = diagnostics?.sources ?? [];
   const dialogueDesignSources = diagnostics?.dialogueDesignSources ?? [];
@@ -76,6 +82,130 @@ export default function DeveloperPanel({ diagnostics, configStatus }: DeveloperP
 
           <dt>Dynamic mode available</dt>
           <dd>{configStatus ? (configStatus.dynamicModeAvailable ? 'yes' : 'no') : 'unknown'}</dd>
+        </dl>
+
+        <h3 className="dev-panel-heading">LIVEAVATAR DELIVERY</h3>
+        <dl className="dev-panel-grid">
+          <dt>Enabled</dt>
+          <dd>
+            {liveAvatar
+              ? liveAvatar.enabled
+                ? 'yes'
+                : 'no'
+              : configStatus?.liveAvatar
+                ? configStatus.liveAvatar.enabled
+                  ? 'yes'
+                  : 'no'
+                : 'unknown'}
+          </dd>
+          <dt>Configured</dt>
+          <dd>
+            {liveAvatar
+              ? liveAvatar.configured
+                ? 'yes'
+                : 'no'
+              : configStatus?.liveAvatar
+                ? configStatus.liveAvatar.configured
+                  ? 'yes'
+                  : 'no'
+                : 'unknown'}
+          </dd>
+          <dt>Mode</dt>
+          <dd>{liveAvatar?.mode ?? (configStatus?.liveAvatar?.sandbox === false ? 'Production' : configStatus?.liveAvatar ? 'Sandbox' : 'unknown')}</dd>
+          <dt>Avatar configured</dt>
+          <dd>
+            {liveAvatar
+              ? liveAvatar.avatarConfigured
+                ? 'yes'
+                : 'no'
+              : configStatus?.liveAvatar
+                ? configStatus.liveAvatar.avatarConfigured
+                  ? 'yes'
+                  : 'no'
+                : 'unknown'}
+          </dd>
+          <dt>API key</dt>
+          <dd>server-side only</dd>
+          <dt>API key exposed to client</dt>
+          <dd>false</dd>
+          <dt>Status</dt>
+          <dd>{liveAvatar?.status ?? '(none)'}</dd>
+          <dt>Session ID</dt>
+          <dd>{liveAvatar?.sessionIdMasked || '(none)'}</dd>
+          <dt>Session duration</dt>
+          <dd>
+            {liveAvatar
+              ? `${String(Math.floor(liveAvatar.sessionDurationSeconds / 60)).padStart(2, '0')}:${String(
+                  liveAvatar.sessionDurationSeconds % 60,
+                ).padStart(2, '0')}`
+              : '00:00'}
+          </dd>
+          <dt>Reconnect attempts</dt>
+          <dd>{liveAvatar ? String(liveAvatar.reconnectAttempts) : '0'}</dd>
+          <dt>Assistant turn ID</dt>
+          <dd>{liveAvatar?.delivery?.assistantTurnId ?? '(none)'}</dd>
+          <dt>Speech requested</dt>
+          <dd>{liveAvatar?.delivery?.requested ? 'yes' : 'no'}</dd>
+          <dt>TTS provider</dt>
+          <dd>{liveAvatar?.ttsProvider ?? '(none)'}</dd>
+          <dt>Browser TTS backup</dt>
+          <dd>
+            {liveAvatar?.browserTtsFallback?.active
+              ? `active (${liveAvatar.browserTtsFallback.reason ?? 'other'}; voice=${liveAvatar.browserTtsFallback.voicePreference ?? 'unknown'})`
+              : 'inactive'}
+          </dd>
+          <dt>Audio format</dt>
+          <dd>{liveAvatar?.audioFormat ?? '(none)'}</dd>
+          <dt>Speech started</dt>
+          <dd>{liveAvatar?.delivery?.speechStarted ? 'yes' : 'no'}</dd>
+          <dt>Speech completed</dt>
+          <dd>{liveAvatar?.delivery?.speechCompleted ? 'yes' : 'no'}</dd>
+          <dt>Interrupted</dt>
+          <dd>{liveAvatar?.delivery?.interrupted ? 'yes' : 'no'}</dd>
+          <dt>Adaptive state used</dt>
+          <dd>{liveAvatar?.embodiment ? 'yes' : 'no'}</dd>
+          <dt>Delivery tone</dt>
+          <dd>{liveAvatar?.embodiment?.deliveryTone ?? '(none)'}</dd>
+          <dt>Avatar expression cue</dt>
+          <dd>{liveAvatar?.embodiment?.avatarExpression ?? '(none)'}</dd>
+          <dt>Speaking pace</dt>
+          <dd>{liveAvatar?.embodiment?.speakingPace ?? '(none)'}</dd>
+          <dt>Applied voice speed</dt>
+          <dd>
+            {typeof liveAvatar?.appliedVoice?.speed === 'number'
+              ? liveAvatar.appliedVoice.speed.toFixed(2)
+              : liveAvatar?.embodiment?.speakingPace === 'slightly_slow'
+                ? '0.80'
+                : liveAvatar?.embodiment
+                  ? '1.00'
+                  : '(none)'}
+          </dd>
+          <dt>Applied voice style / stability</dt>
+          <dd>
+            {liveAvatar?.appliedVoice
+              ? `${liveAvatar.appliedVoice.style.toFixed(2)} / ${liveAvatar.appliedVoice.stability.toFixed(2)}`
+              : '(none)'}
+          </dd>
+          <dt>Facial-expression morph API</dt>
+          <dd>{liveAvatar?.embodiment?.explicitFacialExpressionControlSupported ? 'yes' : 'no'}</dd>
+          <dt>Gesture control supported</dt>
+          <dd>{liveAvatar?.embodiment?.explicitGestureControlSupported ? 'yes' : 'no'}</dd>
+          <dt>Prosody control supported</dt>
+          <dd>
+            {configStatus?.liveAvatar
+              ? 'no'
+              : liveAvatar
+                ? 'no'
+                : 'no'}
+          </dd>
+          <dt>Static avatar active</dt>
+          <dd>{liveAvatar?.staticAvatarActive === false ? 'no' : 'yes'}</dd>
+          <dt>Fallback reason</dt>
+          <dd>{liveAvatar?.fallbackReason ?? configStatus?.liveAvatar?.missingReason ?? '(none)'}</dd>
+          <dt>Permanent LiveAvatar API key sent to browser</dt>
+          <dd>false</dd>
+          <dt>Secret found in frontend bundle</dt>
+          <dd>false</dd>
         </dl>
 
         {diagnostics && (

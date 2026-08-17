@@ -113,6 +113,147 @@ export function detectDualChoiceSelection(latestMessage: string): DualChoiceSele
   return 'ambiguous';
 }
 
+/** Prior assistant asked the user to pick among estimate-focus options. */
+export function detectEstimateFocusOffer(previousAssistantReply?: string | null): boolean {
+  const text = (previousAssistantReply ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!text) return false;
+  const offersMenu =
+    (/\b(numbers?|percentage|estimate)\b/.test(text) &&
+      /\b(calculat|how (it|they) (was|were)|inputs?)\b/.test(text) &&
+      /\bnext steps?\b/.test(text)) ||
+    (/\b(which|what) (specific )?part\b/.test(text) &&
+      /\b(estimate|result|number)\b/.test(text) &&
+      /\bor\b/.test(text));
+  return offersMenu;
+}
+
+export type EstimateFocusSelection =
+  | 'explain_numbers'
+  | 'how_calculated'
+  | 'next_steps'
+  | 'ambiguous';
+
+/** Map a user echo of an estimate-focus menu option. */
+export function detectEstimateFocusSelection(latestMessage: string): EstimateFocusSelection {
+  const m = normalizeUserText(latestMessage);
+  const nextSteps =
+    /\bnext steps?\b/.test(m) ||
+    /\b(mean|means|meaning).{0,48}next steps?\b/.test(m) ||
+    /\bwhat (they|it|this).{0,20}mean for\b/.test(m);
+  const numbersThemselves = /\bnumbers? themselves\b/.test(m);
+  const calculated =
+    /\bcalculat\w*\b/.test(m) ||
+    /\b(computed|produced|derived)\b/.test(m) ||
+    /\bhow (it|they|this).{0,24}(was|were|is|are) (made|done|calculat\w*)\b/.test(m) ||
+    /\binputs?\b/.test(m);
+  const numbers =
+    numbersThemselves ||
+    (/\b(numbers?|percentage|what (the )?(number|estimate|result) means?|explain (the )?(number|estimate|result))\b/.test(
+      m,
+    ) &&
+      !nextSteps &&
+      !calculated);
+
+  if (nextSteps && !calculated) return 'next_steps';
+  if (calculated && !nextSteps && !numbersThemselves) return 'how_calculated';
+  if (numbers && !nextSteps) return 'explain_numbers';
+  if (nextSteps) return 'next_steps';
+  return 'ambiguous';
+}
+
+const CLARIFY_STOP_WORDS = new Set([
+  'about',
+  'after',
+  'affect',
+  'could',
+  'does',
+  'from',
+  'have',
+  'hoping',
+  'into',
+  'just',
+  'know',
+  'like',
+  'might',
+  'more',
+  'overall',
+  'something',
+  'specific',
+  'specifically',
+  'that',
+  'their',
+  'there',
+  'these',
+  'this',
+  'those',
+  'understand',
+  'wanting',
+  'what',
+  'when',
+  'which',
+  'with',
+  'would',
+  'your',
+  'youre',
+]);
+
+/**
+ * Detect when the prior assistant asked "are you wondering X, or …?" / "learn about
+ * X — A, B, or something else?" and the user restates a chosen option.
+ */
+export function detectClarifyingTopicEcho(
+  latestMessage: string,
+  previousAssistantReply?: string | null,
+): { matched: boolean; offeredTopic?: string } {
+  const prev = (previousAssistantReply ?? '').replace(/\s+/g, ' ').trim();
+  const latest = normalizeUserText(latestMessage);
+  if (!prev || !latest) return { matched: false };
+
+  // "what you'd like to learn about the Gail model—its purpose, how it works, or something else?"
+  const learnMenu = prev.match(
+    /\b(?:like to learn|want to (?:know|learn)|hoping to understand|what aspect).{0,100}(?:—|-|:)\s*(?:its\s+)?([^,?]+),\s*(?:its\s+|how\s+)?([^,?]+),\s*or\b/i,
+  );
+  if (learnMenu) {
+    const optA = normalizeUserText(learnMenu[1] ?? '');
+    const optB = normalizeUserText(learnMenu[2] ?? '');
+    if (/\bpurpose\b/.test(latest) && /\bpurpose\b/.test(`${optA} ${optB} ${prev}`)) {
+      return { matched: true, offeredTopic: 'the purpose of the Gail model' };
+    }
+    if (
+      (/\bhow (it|the).{0,24}works?\b/.test(latest) ||
+        /\bestimat/.test(latest) ||
+        /\bhow it works\b/.test(latest)) &&
+      /\b(works?|estimat)/.test(`${optA} ${optB} ${prev}`)
+    ) {
+      return { matched: true, offeredTopic: 'how the Gail model works' };
+    }
+  }
+
+  const wonder = prev.match(
+    /\b(?:are you wondering|hoping to understand|would you like to (?:know|understand)|do you mean|what you(?:'re| are) hoping to understand)\b[:\s—-]*(.+?)(?:,?\s+or\b|\?\s*$)/i,
+  );
+  if (!wonder?.[1]) return { matched: false };
+
+  const offered = normalizeUserText(wonder[1]);
+  const offeredTokens = offered
+    .split(/\s+/)
+    .map((t) => t.replace(/[^a-z0-9']/g, ''))
+    .filter((t) => t.length >= 4 && !CLARIFY_STOP_WORDS.has(t));
+  if (offeredTokens.length < 2) return { matched: false };
+
+  const latestTokenSet = new Set(
+    latest
+      .split(/\s+/)
+      .map((t) => t.replace(/[^a-z0-9']/g, ''))
+      .filter(Boolean),
+  );
+  const overlap = offeredTokens.filter((t) => latestTokenSet.has(t)).length;
+  const needed = Math.min(3, offeredTokens.length);
+  if (overlap < needed) return { matched: false };
+
+  return { matched: true, offeredTopic: offered };
+}
+
 /**
  * Resolves a short/ambiguous reply against the prior pending item.
  * Does not treat every “yes” as understanding confirmation.
@@ -127,6 +268,65 @@ export function resolveContextualReply(
   const dual = detectDualChoiceOffer(previousAssistantReply);
   const selection = detectDualChoiceSelection(latestMessage);
   const inDualChoiceContext = purpose === 'multiple_options' || dual.isDualChoice;
+  const estimateFocusOffer = detectEstimateFocusOffer(previousAssistantReply);
+  const estimateFocusSelection = detectEstimateFocusSelection(latestMessage);
+  const clarifyingEcho = detectClarifyingTopicEcho(latestMessage, previousAssistantReply);
+
+  // User restated the topic from a clarifying "are you wondering X?" offer.
+  if (clarifyingEcho.matched) {
+    const topic = clarifyingEcho.offeredTopic ?? 'the confirmed topic';
+    return {
+      ...base,
+      isShortReply: true,
+      shortReplyType: base.shortReplyType === 'not_short_reply' ? 'affirmation' : base.shortReplyType,
+      kind: 'information_requested',
+      pendingPurpose: purpose,
+      requiresClarification: false,
+      overridePrimaryIntent: 'explain_risk',
+      resolvedMeaning: `The user confirmed the clarifying topic (${topic}). Answer that topic directly without asking another clarifying question.`,
+    };
+  }
+
+  // User echoed a prior estimate-focus menu option — advance instead of re-asking.
+  if (estimateFocusOffer && estimateFocusSelection === 'next_steps') {
+    return {
+      ...base,
+      isShortReply: true,
+      shortReplyType: base.shortReplyType === 'not_short_reply' ? 'affirmation' : base.shortReplyType,
+      kind: 'information_requested',
+      pendingPurpose: 'multiple_options',
+      requiresClarification: false,
+      overridePrimaryIntent: 'request_next_step',
+      resolvedMeaning:
+        'The user chose what the estimate means for next steps. Provide neutral general next-step options.',
+    };
+  }
+  if (estimateFocusOffer && estimateFocusSelection === 'how_calculated') {
+    return {
+      ...base,
+      isShortReply: true,
+      shortReplyType: base.shortReplyType === 'not_short_reply' ? 'affirmation' : base.shortReplyType,
+      kind: 'information_requested',
+      pendingPurpose: 'multiple_options',
+      requiresClarification: false,
+      overridePrimaryIntent: 'explain_risk',
+      resolvedMeaning:
+        'The user chose how the estimate was calculated. Explain the calculator inputs and demonstration basis.',
+    };
+  }
+  if (estimateFocusOffer && estimateFocusSelection === 'explain_numbers') {
+    return {
+      ...base,
+      isShortReply: true,
+      shortReplyType: base.shortReplyType === 'not_short_reply' ? 'affirmation' : base.shortReplyType,
+      kind: 'information_requested',
+      pendingPurpose: 'multiple_options',
+      requiresClarification: false,
+      overridePrimaryIntent: 'explain_risk',
+      resolvedMeaning:
+        'The user chose clarifying the risk number. Explain the demonstration estimate in plain terms.',
+    };
+  }
 
   // User already chose one side of the A-or-B offer — advance the flow.
   if (inDualChoiceContext && selection === 'prepare_questions') {

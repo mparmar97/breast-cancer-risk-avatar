@@ -77,6 +77,8 @@ const FIXED_TYPOS: Array<[RegExp, string]> = [
   [/\bseeyou\b/gi, 'see you'],
   [/\bthankyou\b/gi, 'thank you'],
   [/\btensed\b/gi, 'tense'],
+  [/\brutine\b/gi, 'routine'],
+  [/\broutien\b/gi, 'routine'],
 ];
 
 function levenshtein(a: string, b: string): number {

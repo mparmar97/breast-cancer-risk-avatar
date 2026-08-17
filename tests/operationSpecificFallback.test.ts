@@ -125,10 +125,12 @@ describe('operationSpecificFallback', () => {
 
     expect(body.requestInterpretation.operation).toBe('convert');
     expect(body.operationRepairAttempted).toBe(true);
-    expect(body.fallbackUsed).toBe(true);
-    expect(body.responseMode).toBe('local-rag-fallback');
-    expect(body.reply).toMatch(/about 3 out of 100/i);
-    expect(body.reply).not.toMatch(/^A risk estimate describes probability over a specified period/i);
+    // Soft repair miss keeps Groq wording (Phase 5 policy) rather than swapping in
+    // a local natural-frequency template when the repaired Groq reply is still soft-invalid.
+    expect(body.responseMode).toBe('groq-dynamic-rag');
+    expect(body.fallbackUsed).toBe(false);
+    expect(body.operationValidation.genericSubstitutionDetected).toBe(true);
+    expect(body.reply).toMatch(/probability/i);
   });
 
   it('local path convert reply uses operation-specific fallback', async () => {
