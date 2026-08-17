@@ -1,5 +1,5 @@
 /**
- * Writes a simple one-page-ish PDF from docs/design-rationale.md without Puppeteer.
+ * Writes docs/design-rationale.pdf from docs/design-rationale.md (one US Letter page).
  * Usage: node scripts/write-design-rationale-pdf.mjs
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -16,13 +16,16 @@ const text = md
   .replace(/^>.*$/gm, '')
   .replace(/^#{1,6}\s*/gm, '')
   .replace(/\*\*(.*?)\*\*/g, '$1')
+  .replace(/\*([^*]+)\*/g, '$1')
   .replace(/`([^`]+)`/g, '$1')
   .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
   .replace(/\|/g, ' ')
   .replace(/-{3,}/g, '')
+  .replace(/^\*Regenerate PDF.*$/gm, '')
   .replace(/\n{3,}/g, '\n\n')
   .trim();
 
+const MAX_CHARS = 98;
 const lines = [];
 for (const paragraph of text.split('\n')) {
   const words = paragraph.split(/\s+/).filter(Boolean);
@@ -33,8 +36,8 @@ for (const paragraph of text.split('\n')) {
   let current = '';
   for (const word of words) {
     const next = current ? `${current} ${word}` : word;
-    if (next.length > 90) {
-      lines.push(current);
+    if (next.length > MAX_CHARS) {
+      if (current) lines.push(current);
       current = word;
     } else {
       current = next;
@@ -43,8 +46,19 @@ for (const paragraph of text.split('\n')) {
   if (current) lines.push(current);
 }
 
-const pageLines = lines.slice(0, 52);
-const contentLines = ['BT', '/F1 10 Tf', '50 780 Td', '14 TL'];
+// US Letter 612×792 pt — compact 7.5pt Helvetica to fit full rationale on one page
+const FONT_SIZE = 7.5;
+const LEADING = 9.2;
+const MARGIN_LEFT = 40;
+const MARGIN_TOP = 758;
+const MAX_LINES = 78;
+
+const pageLines = lines.slice(0, MAX_LINES);
+if (lines.length > MAX_LINES) {
+  console.warn(`Warning: truncated ${lines.length - MAX_LINES} lines to fit one page`);
+}
+
+const contentLines = ['BT', `/F1 ${FONT_SIZE} Tf`, `${MARGIN_LEFT} ${MARGIN_TOP} Td`, `${LEADING} TL`];
 pageLines.forEach((line, index) => {
   const escaped = line.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
   if (index === 0) {
@@ -80,5 +94,16 @@ for (let i = 1; i < offsets.length; i += 1) {
 }
 pdf += `trailer<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
 
-writeFileSync(outPath, pdf);
-console.log(`Wrote ${outPath}`);
+const altPath = join(root, 'docs', 'design-rationale.generated.pdf');
+try {
+  writeFileSync(outPath, pdf);
+  console.log(`Wrote ${outPath} (${pageLines.length} lines, ${FONT_SIZE}pt)`);
+} catch (err) {
+  if (err && typeof err === 'object' && 'code' in err && err.code === 'EBUSY') {
+    writeFileSync(altPath, pdf);
+    console.log(`Target locked; wrote ${altPath} instead (${pageLines.length} lines, ${FONT_SIZE}pt)`);
+    console.log('Close design-rationale.pdf in your editor, then re-run to overwrite.');
+  } else {
+    throw err;
+  }
+}

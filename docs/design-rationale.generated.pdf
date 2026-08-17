@@ -1,0 +1,160 @@
+%PDF-1.4
+1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj
+2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj
+3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj
+4 0 obj<< /Length 4327 >>stream
+BT
+/F1 7.5 Tf
+40 758 Td
+9.2 TL
+(Design Rationale — VARE Breast-Cancer Risk Avatar) Tj
+T*
+() Tj
+T*
+(Author: Trial project submission Date: August 2026) Tj
+T*
+() Tj
+T*
+(Problem and goal) Tj
+T*
+() Tj
+T*
+(Breast-cancer risk calculators return a percentage many users find meaningless or) Tj
+T*
+(frightening—neither drives reliable follow-up. VARE adds a 2-3 minute conversational layer after a) Tj
+T*
+(Gail-inspired educational estimate: explain the number, adapt to) Tj
+T*
+(understanding/emotion/barriers/readiness, support decision preparedness, and motivate optional) Tj
+T*
+(next steps—without diagnosing or impersonating a clinician. Educational prototype only; not) Tj
+T*
+(clinically validated.) Tj
+T*
+() Tj
+T*
+(Design decision: adaptive orchestration) Tj
+T*
+() Tj
+T*
+(The pipeline separates conversational-state estimation, Ottawa-inspired decisional-needs support,) Tj
+T*
+(deterministic theory-based strategy selection, vetted local RAG, dynamic Groq wording \(with local) Tj
+T*
+(fallback\), and safety validation. Groq never chooses strategy or invents medical facts outside) Tj
+T*
+(retrieved evidence.) Tj
+T*
+() Tj
+T*
+(Theories and operationalization) Tj
+T*
+() Tj
+T*
+(Fuzzy-Trace Theory \(FTT\) — Reyna 2008; Wolfe et al. 2015; Widmer et al. 2015. Users need gist) Tj
+T*
+(\(probability is not diagnosis\) before action talk. Implemented via clarify_risk + teach-back when) Tj
+T*
+(understanding is partial/incorrect.) Tj
+T*
+() Tj
+T*
+(Health Belief Model \(HBM\) — Rosenstock 1974. Preventive action requires calibrated severity,) Tj
+T*
+(benefits vs barriers, self-efficacy, cues to action. Elevated branch calibrates severity and) Tj
+T*
+(surfaces barriers; average branch reassures without false certainty.) Tj
+T*
+() Tj
+T*
+(Motivational Interviewing \(MI\) — Rollnick et al. 2008; Mercado et al. 2023. Direct persuasion) Tj
+T*
+(increases resistance; reflection and open questions preserve autonomy in acknowledge_emotion and) Tj
+T*
+(planning turns.) Tj
+T*
+() Tj
+T*
+(Ottawa Decision Support Framework–inspired — Stacey et al. 2014. Estimates temporary decisional) Tj
+T*
+(needs \(missing information, unclear options/preferences, low confidence\) and supports) Tj
+T*
+(drafting/timing without making medical decisions. Selected options \(portal vs phone\) persist) Tj
+T*
+(across turns.) Tj
+T*
+() Tj
+T*
+(Risk-communication framing — Fagerlin et al. 2007; NCI 2024. Natural frequencies \(“X in 100”\) over) Tj
+T*
+(relative-only framing; grounded in vetted NCI evidence chunks.) Tj
+T*
+() Tj
+T*
+(Avatar choice) Tj
+T*
+() Tj
+T*
+(Production: LiveAvatar “Ann Doctor Sitting”—professional, approachable female presenter; warm tone) Tj
+T*
+(aligned with NCI/ACS patient-education style \(ages 35-85\). Failover: static “Maya” image + text) Tj
+T*
+(when video unavailable. Role: AI health educator, not a clinician \(reduces authority) Tj
+T*
+(misattribution\). Architecture: LiveAvatar LITE—app controls all medical content; avatar lip-syncs) Tj
+T*
+(verbatim validated text only. Wolfe 2015 supports FTT-grounded avatar risk tutoring; Mercado 2023) Tj
+T*
+(supports MI-consistent embodied agents.) Tj
+T*
+() Tj
+T*
+(Engineering and safety) Tj
+T*
+() Tj
+T*
+(LiveAvatar LITE \(1 credit/min\) preserves RAG/theory control vs FULL. Keyword RAG: 17 vetted chunks) Tj
+T*
+(\(NCI, USPSTF, ACS\). Gail-inspired form \(not official BCRAT\). Cloudflare Workers single deploy.) Tj
+T*
+(Consent + fixed safety overrides for diagnosis, treatment, urgent symptoms, crisis.) Tj
+T*
+() Tj
+T*
+(References) Tj
+T*
+() Tj
+T*
+(1. Reyna VF. Fuzzy-Trace Theory. Med Decis Making. 2008;28\(6\):850-865.) Tj
+T*
+(2. Wolfe CR, et al. FTT genetic breast cancer risk tutoring. Med Decis Making. 2015;35\(1\):46-59.) Tj
+T*
+(3. Widmer CL, et al. Tutorial dialogues & gist. Behav Res Methods. 2015.) Tj
+T*
+(4. Rosenstock IM. Health Belief Model. Health Educ Monogr. 1974;2:328-335.) Tj
+T*
+(5. Rollnick S, Miller WR, Butler CC. Motivational Interviewing in Health Care. Guilford, 2008.) Tj
+T*
+(6. Mercado M, et al. ECAs + MI scoping review. J Med Internet Res. 2023.) Tj
+T*
+(7. Stacey D, et al. Decision aids \(Ottawa framework update\). Cochrane. 2014.) Tj
+T*
+(8. Fagerlin A, et al. Risk format presentation. Med Decis Making. 2007;27\(5\):638-654.) Tj
+T*
+(9. Reynolds S. How Breast Cancer Risk Assessment Tools Work. NCI. June 27, 2024.) Tj
+ET
+endstream
+endobj
+5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000056 00000 n 
+0000000111 00000 n 
+0000000235 00000 n 
+0000004611 00000 n 
+trailer<< /Size 6 /Root 1 0 R >>
+startxref
+4679
+%%EOF

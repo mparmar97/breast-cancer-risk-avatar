@@ -1,120 +1,43 @@
-# Design Rationale — Breast Cancer Risk Companion
+# Design Rationale — VARE Breast-Cancer Risk Avatar
 
-**Author:** Trial project submission  
-**Date:** August 2026  
-**One-page summary for PDF export**
+**Author:** Trial project submission | **Date:** August 2026
 
-> **Note on implementation status.** **Groq** powers optional dynamic
-> reply generation with a local grounded fallback (rate limit / network /
-> safety). Groq never chooses dialogue strategy or invents medical facts
-> outside retrieved evidence — see
-> [`PHASE_5_GROQ_DYNAMIC_DIALOGUE.md`](./PHASE_5_GROQ_DYNAMIC_DIALOGUE.md).
-> The app includes a **built-in Gail-inspired educational calculator form**
-> (not the official NCI BCRAT) that branches average vs elevated, plus a
-> static **Maya** avatar image with text-chat failover when video is
-> unavailable. LiveAvatar streaming remains optional for credit-budget
-> reasons. Evidence is local keyword RAG over 17 chunks from 10 sources —
-> see [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md). This is an
-> educational prototype — not clinically validated.
->
-> The prototype’s distinctive contribution is its **adaptive orchestration
-> layer**. It separates conversational-state interpretation, decisional-needs
-> support, behavioral-theory strategy selection, medical evidence
-> retrieval, dynamic language generation, and deterministic safety
-> validation. The application is designed to address contributors to
-> decisional conflict and improve decision preparedness. Clinical
-> effectiveness has not been established. See
-> [`PROJECT_INNOVATION_SUMMARY.md`](./PROJECT_INNOVATION_SUMMARY.md) and
-> [`NOVELTY_AND_RESEARCH_GAP.md`](./NOVELTY_AND_RESEARCH_GAP.md).
+## Problem and goal
 
----
+Breast-cancer risk calculators return a percentage many users find meaningless or frightening—neither drives reliable follow-up. VARE adds a 2-3 minute conversational layer after a Gail-inspired educational estimate: explain the number, adapt to understanding/emotion/barriers/readiness, support decision preparedness, and motivate optional next steps—without diagnosing or impersonating a clinician. Educational prototype only; not clinically validated.
 
-## Problem & goal
+## Design decision: adaptive orchestration
 
-Breast cancer risk calculators return a percentage that many users find either meaningless or frightening—neither reaction reliably drives appropriate follow-up. This app adds a **2–3 minute conversational layer**: explain the number in plain language, branch on elevated vs average risk, and motivate concrete next steps without diagnosing or impersonating a clinician.
+The pipeline separates conversational-state estimation, Ottawa-inspired decisional-needs support, deterministic theory-based strategy selection, vetted local RAG, dynamic Groq wording (with local fallback), and safety validation. Groq never chooses strategy or invents medical facts outside retrieved evidence.
 
----
+## Theories and operationalization
 
-## Theories chosen & operationalization
+**Fuzzy-Trace Theory (FTT)** — Reyna 2008; Wolfe et al. 2015; Widmer et al. 2015. Users need gist (probability is not diagnosis) before action talk. Implemented via clarify_risk + teach-back when understanding is partial/incorrect.
 
-### 1. Health Belief Model (HBM) — Rosenstock, 1974; updated in breast screening literature
+**Health Belief Model (HBM)** — Rosenstock 1974. Preventive action requires calibrated severity, benefits vs barriers, self-efficacy, cues to action. Elevated branch calibrates severity and surfaces barriers; average branch reassures without false certainty.
 
-**Why:** HBM predicts preventive action when people perceive susceptibility and severity *accurately*, believe benefits outweigh barriers, and feel capable of acting.
+**Motivational Interviewing (MI)** — Rollnick et al. 2008; Mercado et al. 2023. Direct persuasion increases resistance; reflection and open questions preserve autonomy in acknowledge_emotion and planning turns.
 
-**In the dialogue (`shared/dialogue.ts`):**
-- **Elevated branch:** Calibrate severity (“most women with this estimate do *not* get cancer”); cue to action (clinician visit in 2–4 weeks); surface barriers (cost, false alarms); build self-efficacy (“you’re already taking a helpful step”).
-- **Average branch:** Reassure without false certainty; cue routine mammography; affirm existing healthy behaviors.
+**Ottawa Decision Support Framework–inspired** — Stacey et al. 2014. Estimates temporary decisional needs (missing information, unclear options/preferences, low confidence) and supports drafting/timing without making medical decisions. Selected options (portal vs phone) persist across turns.
 
-### 2. Fagerlin et al. risk-communication principles — *Med Decis Making* 2007
+**Risk-communication framing** — Fagerlin et al. 2007; NCI 2024. Natural frequencies (“X in 100”) over relative-only framing; grounded in vetted NCI evidence chunks.
 
-**Why:** Absolute risks with denominators (e.g., “2 in 100”) outperform relative-only framing for comprehension and appropriate worry.
+## Avatar choice
 
-**In the dialogue:** Opening script and system prompt require absolute risk + age-matched comparator; forbid “double your risk” without absolute numbers. In the implemented prototype, the `nci-natural-frequency-001` evidence chunk (National Cancer Institute — see [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md)) grounds this natural-frequency framing.
+**Production:** LiveAvatar “Ann Doctor Sitting”—professional, approachable female presenter; warm tone aligned with NCI/ACS patient-education style (ages 35-85). **Failover:** static “Maya” image + text when video unavailable. **Role:** AI health educator, not a clinician (reduces authority misattribution). **Architecture:** LiveAvatar LITE—app controls all medical content; avatar lip-syncs verbatim validated text only. Wolfe 2015 supports FTT-grounded avatar risk tutoring; Mercado 2023 supports MI-consistent embodied agents.
 
-### 3. Motivational Interviewing (OARS) — Rollnick, Miller & Butler, 2008
+## Engineering and safety
 
-**Why:** Direct persuasion increases resistance in health contexts; MI elicits change talk.
+LiveAvatar LITE (1 credit/min) preserves RAG/theory control vs FULL. Keyword RAG: 17 vetted chunks (NCI, USPSTF, ACS). Gail-inspired form (not official BCRAT). Cloudflare Workers single deploy. Consent + fixed safety overrides for diagnosis, treatment, urgent symptoms, crisis.
 
-**In the dialogue:** Elevated branch ends with open questions (“What would help you take the next step?”); chat suggestions are user-paced; assistant reflects rather than commands.
+## References
 
----
-
-## Avatar choice: “Maya” — warm female health educator
-
-**Selection criteria (research-informed):**
-- **Trust & warmth:** Health messages from perceived-credible, empathetic presenters increase recall and reduce defensive processing (source: health communication meta-literature; ACS/NCI patient-education tone).
-- **Role clarity:** Introduces self as **AI health educator, not a clinician**—reduces authority misattribution and supports R7 safety.
-- **Appearance:** Production avatar from LiveAvatar public catalog—professional, approachable, age-appropriate for 35–85 audience; avoids overly glamorous or clinical-stiff personas that undermine relatability in sensitive health topics.
-- **Sandbox development:** Wayne avatar (`dd73ea75-…`) for zero-credit dev; swap to production female presenter avatar for deployment.
-
-**Voice & session design:** Lite mode + Groq `llama-3.3-70b-versatile` (low latency, ~2 min target). Medium video quality to conserve bandwidth; 300 s session cap aligned with Starter plan.
-
----
-
-## Engineering trade-offs
-
-| Decision | Rationale |
-|----------|-----------|
-| **LiveAvatar LITE + Groq** | 1 credit/min vs 2 for FULL; full control of RAG prompt and theory scripts |
-| **Gail-inspired educational form** | Same input categories as Gail/BCRAT; simplified scoring for demo branching; clearly labeled non-clinical |
-| **Keyword RAG vs embeddings** | 17 small, vetted chunks from 10 real sources; deterministic citations; no embedding API cost; no live medical web search at runtime |
-| **Cloudflare Workers** | Free tier, single deploy unit (SPA + API), global edge |
-| **Text fallback + static image** | R5 compliance when WebRTC/avatar fails |
-| **Sandbox-first dev** | Protects 150-credit budget per trial constraints |
-
----
-
-## Safety (R7)
-
-- Persistent medical disclaimer; consent before assessment  
-- System prompt: no diagnosis, deflect personal symptoms  
-- Scope limited to curated sources; out-of-scope → clinician referral language  
-
----
-
-## References (avatar & theory)
-
-1. Fagerlin A, et al. Presenting health risk information in different formats. *Med Decis Making.* 2007;27(5):638-654.  
-2. Rosenstock IM. Historical origins of the health belief model. *Health Educ Monogr.* 1974;2:328-335.  
-3. Rollnick S, Miller WR, Butler CC. *Motivational Interviewing in Health Care.* Guilford, 2008.  
-4. NCI Breast Cancer Risk Assessment Tool (Gail Model). https://bcrisktool.cancer.gov/  
-5. Gail MH, et al. Projecting individualized probabilities of developing breast cancer. *JNCI.* 1989.  
-6. Oeffinger KC, et al. Breast cancer screening for women at average risk. *JAMA.* 2015.  
-
-**Sources actually implemented in the prototype's evidence pipeline
-today** (10 sources, 17 chunks — full citations, URLs, and per-chunk
-claims in [`EVIDENCE_REGISTER.md`](./EVIDENCE_REGISTER.md)):
-
-- Medical RAG: National Cancer Institute (About the Gail Model calculator;
-  the online calculator; "How Breast Cancer Risk Assessment Tools Work";
-  "Breast Cancer Risk in American Women"; "Understanding Breast Changes and
-  Conditions"); US Preventive Services Task Force (2024 breast cancer
-  screening recommendation).
-- Dialogue-design (theory/technique rationale, never medical support):
-  Reyna 2008 (Fuzzy-Trace Theory); Wolfe et al. 2015 and Widmer et al. 2015
-  (BRCA Gist tutoring-dialogue studies); Mercado et al. 2023 (motivational
-  interviewing in embodied conversational agents, scoping review).
-
----
-
-*PDF hand-in: [`design-rationale.pdf`](./design-rationale.pdf) (regenerate with `node scripts/write-design-rationale-pdf.mjs`).*
+1. Reyna VF. Fuzzy-Trace Theory. Med Decis Making. 2008;28(6):850-865.  
+2. Wolfe CR, et al. FTT genetic breast cancer risk tutoring. Med Decis Making. 2015;35(1):46-59.  
+3. Widmer CL, et al. Tutorial dialogues & gist. Behav Res Methods. 2015.  
+4. Rosenstock IM. Health Belief Model. Health Educ Monogr. 1974;2:328-335.  
+5. Rollnick S, Miller WR, Butler CC. Motivational Interviewing in Health Care. Guilford, 2008.  
+6. Mercado M, et al. ECAs + MI scoping review. J Med Internet Res. 2023.  
+7. Stacey D, et al. Decision aids (Ottawa framework update). Cochrane. 2014.  
+8. Fagerlin A, et al. Risk format presentation. Med Decis Making. 2007;27(5):638-654.  
+9. Reynolds S. How Breast Cancer Risk Assessment Tools Work. NCI. June 27, 2024.
