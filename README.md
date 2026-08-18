@@ -331,6 +331,4 @@ npx wrangler login
 npm run deploy
 ```
 
-## License
 
-MIT — educational/prototype project.
